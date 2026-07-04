@@ -191,6 +191,34 @@ describe('OrderController', () => {
       expect(json.data.clientSecret).toBe('pi_test_secret');
     });
 
+    it('creates UPI order successfully', async () => {
+      Cart.findOne = jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue({ items: [sampleCartItem] }),
+      });
+
+      const mockOrderDoc = {
+        _id:         new mongoose.Types.ObjectId(),
+        finalAmount: 998,
+        status:      'placed',
+        upiTxnId:    '123456789012',
+      };
+
+      Order.create = jest.fn().mockResolvedValue([mockOrderDoc]);
+      Coupon.findOne = jest.fn().mockResolvedValue(null);
+
+      const req = {
+        user: mockUser,
+        body: { address: sampleAddress, paymentMethod: 'upi', upiTxnId: '123456789012' },
+      };
+      const res = mockRes();
+
+      await createOrder(req, res);
+
+      expect(Order.create).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json.mock.calls[0][0].message).toMatch(/upi payment/i);
+    });
+
     it('applies coupon discount correctly', async () => {
       Cart.findOne = jest.fn().mockReturnValue({
         populate: jest.fn().mockResolvedValue({ items: [sampleCartItem] }),
