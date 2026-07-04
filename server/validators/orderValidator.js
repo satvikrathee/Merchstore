@@ -20,15 +20,19 @@ const addressSchema = z.object({
  */
 const createOrderSchema = z.object({
   address:       addressSchema.optional(),
-  paymentMethod: z.enum(['stripe', 'cod'], {
-    errorMap: () => ({ message: "paymentMethod must be 'stripe' or 'cod'" }),
+  paymentMethod: z.enum(['stripe', 'cod', 'upi'], {
+    errorMap: () => ({ message: "paymentMethod must be 'stripe', 'cod', or 'upi'" }),
   }),
   couponCode:    z.string().min(2).max(50).optional().nullable(),
   // Frontend may pass saved addressId to look up instead of full address
   addressId:     objectIdSchema.optional(),
+  upiTxnId:      z.string().optional().nullable(),
 }).refine(
   (data) => data.address || data.addressId,
   { message: 'Either address object or addressId must be provided', path: ['address'] }
+).refine(
+  (data) => data.paymentMethod !== 'upi' || (data.upiTxnId && /^\d{12}$/.test(data.upiTxnId)),
+  { message: 'UPI Transaction ID is required and must be exactly 12 digits for UPI payment', path: ['upiTxnId'] }
 );
 
 /**
@@ -48,7 +52,7 @@ const adminOrdersQuerySchema = z.object({
   page:          z.string().optional().transform(v => parseInt(v, 10) || 1),
   limit:         z.string().optional().transform(v => Math.min(parseInt(v, 10) || 20, 100)),
   status:        z.enum(['placed', 'packed', 'shipped', 'delivered', 'cancelled']).optional(),
-  paymentMethod: z.enum(['stripe', 'cod']).optional(),
+  paymentMethod: z.enum(['stripe', 'cod', 'upi']).optional(),
   startDate:     z.string().optional(),
   endDate:       z.string().optional(),
   search:        z.string().max(100).optional(),

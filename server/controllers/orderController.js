@@ -173,9 +173,10 @@ const createOrder = asyncHandler(async (req, res) => {
         finalAmount,
         couponCode:     couponCode?.toUpperCase() || null,
         paymentMethod,
-        paymentStatus:  paymentMethod === 'cod' ? 'pending' : 'pending',
+        paymentStatus:  'pending',
         address:        resolvedAddress,
         stripeIdempotencyKey: paymentMethod === 'stripe' ? idempotencyKey : null,
+        upiTxnId:       paymentMethod === 'upi' ? req.body.upiTxnId : null,
         statusHistory:  [{ status: 'placed', timestamp: new Date(), note: 'Order placed' }],
       };
 
@@ -221,12 +222,29 @@ const createOrder = asyncHandler(async (req, res) => {
 
         await clearCartByUserId(userId);
       }
+
+      // ── 10. UPI path: create order immediately ────────────────────────────
+      if (paymentMethod === 'upi') {
+        const [order] = await Order.create([orderData], { session });
+        savedOrder = order;
+
+        if (appliedCoupon) {
+          await Coupon.findByIdAndUpdate(
+            appliedCoupon._id,
+            { $inc: { usedCount: 1 } },
+            { session }
+          );
+        }
+
+        await clearCartByUserId(userId);
+      }
     });
 
     if (paymentMethod === 'stripe' && savedOrder) {
       return res.status(201).json({
         success: true,
         message: 'Order initiated — complete payment',
+        order:       savedOrder,
         data: {
           order:            savedOrder,
           orderId:          savedOrder._id,
@@ -242,6 +260,22 @@ const createOrder = asyncHandler(async (req, res) => {
       return res.status(201).json({
         success: true,
         message: 'Order placed successfully (Cash on Delivery)',
+        order:       savedOrder,
+        data: {
+          order:       savedOrder,
+          orderId:     savedOrder._id,
+          finalAmount: savedOrder.finalAmount,
+          status:      savedOrder.status,
+        },
+      });
+    }
+
+    // UPI response (outside transaction block)
+    if (paymentMethod === 'upi' && savedOrder) {
+      return res.status(201).json({
+        success: true,
+        message: 'Order placed successfully (UPI Payment)',
+        order:       savedOrder,
         data: {
           order:       savedOrder,
           orderId:     savedOrder._id,
