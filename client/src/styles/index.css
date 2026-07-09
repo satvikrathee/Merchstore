@@ -18,7 +18,7 @@
   .btn-primary {
     @apply px-6 py-3 bg-brand-maroon-700 hover:bg-brand-maroon-600 active:bg-brand-maroon-800 text-white font-medium rounded-xl shadow-premium hover:shadow-premium-hover transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed;
   }
-  
+
   .btn-secondary {
     @apply px-6 py-3 bg-white border border-brand-dark-200 hover:border-brand-maroon-500 text-brand-dark-700 hover:text-brand-maroon-700 font-medium rounded-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -32,39 +32,64 @@
   }
 
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-md border border-white/30 shadow-glass;
+    @apply bg-white/80 backdrop-blur-lg border border-white/40 shadow-glass;
   }
-  
+
   .glass-panel-dark {
-    @apply bg-brand-dark-950/80 backdrop-blur-md border border-brand-dark-900/50 shadow-2xl;
+    @apply bg-brand-dark-950/85 backdrop-blur-lg border border-white/10 shadow-2xl;
   }
-  
+
   .input-field {
-    @apply w-full px-4 py-3 bg-white border border-brand-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-maroon-500 focus:border-transparent transition-all duration-200;
+    @apply w-full px-4 py-3 bg-white border border-brand-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-maroon-500/30 focus:border-brand-maroon-400 transition-all duration-200;
+  }
+
+  .section-heading {
+    @apply font-display font-bold text-3xl sm:text-4xl text-brand-dark-900 tracking-tight;
+  }
+
+  .section-subheading {
+    @apply font-sans text-brand-dark-500 mt-3 max-w-xl;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
-  
+
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   .scrollbar-thin::-webkit-scrollbar-thumb {
     @apply bg-brand-dark-200 rounded-full hover:bg-brand-dark-300;
   }
 }
 
-/* Custom animation for gradient text */
 @keyframes gradient-shift {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .animate-gradient {
   background-size: 200% auto;
   animation: gradient-shift 4s ease infinite;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.5s ease-out forwards;
 }
