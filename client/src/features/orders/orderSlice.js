@@ -85,13 +85,15 @@ const orderSlice = createSlice({
       state.couponError = null;
     },
     updateOrderStatusInList: (state, action) => {
-      const { orderId, status } = action.payload;
+      const { orderId, status, paymentStatus } = action.payload;
       const order = state.list.find((o) => o._id === orderId);
       if (order) {
-        order.status = status;
+        if (status) order.status = status;
+        if (paymentStatus) order.paymentStatus = paymentStatus;
       }
       if (state.currentOrder?._id === orderId) {
-        state.currentOrder.status = status;
+        if (status) state.currentOrder.status = status;
+        if (paymentStatus) state.currentOrder.paymentStatus = paymentStatus;
       }
     },
   },

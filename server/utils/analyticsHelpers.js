@@ -113,10 +113,11 @@ const buildTopProductsPipeline = (limit = 10, dateFilter = null) => {
     matchStage,
     // Unwind items array to get one document per item
     { $unwind: '$items' },
-    // Group by productId
+    // Group by product name to aggregate sales of the same product regardless of re-seeding/different IDs
     {
       $group: {
-        _id:         '$items.productId',
+        _id:         '$items.name',
+        productId:   { $first: '$items.productId' },
         productName: { $first: '$items.name' },
         productImage:{ $first: '$items.image' },
         totalQtySold:{ $sum: '$items.qty' },
@@ -127,12 +128,12 @@ const buildTopProductsPipeline = (limit = 10, dateFilter = null) => {
     // Sort by qty sold descending
     { $sort: { totalQtySold: -1 } },
     { $limit: limit },
-    // Lookup product details
+    // Lookup product details by name matching
     {
       $lookup: {
         from:         'products',
-        localField:   '_id',
-        foreignField: '_id',
+        localField:   'productName',
+        foreignField: 'name',
         as:           'productDetails',
         pipeline:     [{ $project: { name: 1, images: { $slice: ['$images', 1] }, category: 1, price: 1 } }],
       },
@@ -140,7 +141,7 @@ const buildTopProductsPipeline = (limit = 10, dateFilter = null) => {
     {
       $project: {
         _id:          0,
-        productId:    '$_id',
+        productId:    1,
         productName:  1,
         category:     { $arrayElemAt: ['$productDetails.category', 0] },
         image:        { $arrayElemAt: [{ $arrayElemAt: ['$productDetails.images', 0] }, 0] },

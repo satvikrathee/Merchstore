@@ -163,11 +163,18 @@ const startServer = async () => {
 
   const activePort = await listenOnAvailablePort(PORT);
 
+  const maskedClientId = process.env.GOOGLE_CLIENT_ID
+    ? (process.env.GOOGLE_CLIENT_ID.startsWith('dummy')
+      ? '⚠️ dummy_google_id'
+      : `${process.env.GOOGLE_CLIENT_ID.substring(0, 12)}...${process.env.GOOGLE_CLIENT_ID.slice(-8)}`)
+    : '❌ Not Configured';
+
   console.log('');
   console.log('╔════════════════════════════════════════════════╗');
   console.log(`║  🎓 MerchStore API Server                      ║`);
   console.log(`║  🚀 Running on http://localhost:${activePort}           ║`);
   console.log(`║  🌍 Environment: ${(process.env.NODE_ENV || 'development').padEnd(29)}║`);
+  console.log(`║  🔑 Google Client ID: ${maskedClientId.padEnd(25)}║`);
   console.log(`║  🔌 WebSocket: Active (Socket.io)              ║`);
   console.log('╚════════════════════════════════════════════════╝');
   console.log('');
