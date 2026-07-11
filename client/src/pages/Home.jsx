@@ -121,15 +121,6 @@ const Home = () => {
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-brand-dark-950/80 via-transparent to-transparent" />
-                  <div className="absolute bottom-6 left-6 right-6 p-5 glass-panel-dark rounded-[20px] flex items-center justify-between border border-white/10 shadow-2xl">
-                    <div>
-                      <p className="font-display font-bold text-sm text-white">GU Varsity Hoodie</p>
-                      <p className="font-sans text-xs text-brand-gold-400 mt-1">₹1,499 — Pure Cotton Fleece</p>
-                    </div>
-                    <Link to="/products" className="p-3 bg-brand-gold-500 text-brand-dark-950 rounded-xl hover:bg-brand-gold-400 transition-colors shadow-md">
-                      <ShoppingBag className="w-4.5 h-4.5" />
-                    </Link>
-                  </div>
                 </div>
               </div>
             </div>
