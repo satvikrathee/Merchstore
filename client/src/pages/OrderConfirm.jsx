@@ -14,6 +14,7 @@ const OrderConfirm = () => {
   
   const { currentOrder: order, loading } = useSelector((state) => state.orders);
   const [localStatus, setLocalStatus] = useState('');
+  const [localPaymentStatus, setLocalPaymentStatus] = useState('');
 
   // Review states
   const [selectedProductForReview, setSelectedProductForReview] = useState(null);
@@ -61,12 +62,22 @@ const OrderConfirm = () => {
   useEffect(() => {
     if (order) {
       setLocalStatus(order.status);
+      setLocalPaymentStatus(order.paymentStatus || 'pending');
     }
   }, [order]);
 
   // 2. Connect mock websocket tracker
   useSocket(orderId, (update) => {
-    setLocalStatus(update.status);
+    if (update.status) {
+      setLocalStatus(update.status);
+    }
+    if (update.paymentStatus) {
+      setLocalPaymentStatus(update.paymentStatus);
+      toast.success(`Payment status updated to: ${update.paymentStatus}!`, {
+        icon: '💳',
+        duration: 4000
+      });
+    }
   });
 
   if (loading) return <Loader fullScreen />;
@@ -223,20 +234,53 @@ const OrderConfirm = () => {
             <div className="space-y-1 text-right">
               <span className="font-bold uppercase tracking-wider text-brand-dark-400">Payment Status</span>
               <div className="text-brand-dark-800 font-bold capitalize space-y-1 flex flex-col items-end">
-                {order.paymentMethod === 'stripe' ? (
-                  <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">Paid (Stripe)</span>
-                ) : order.paymentMethod === 'upi' ? (
-                  <>
-                    <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">UPI (Pending Verification)</span>
-                    {order.upiTxnId && (
-                      <span className="text-[10px] text-brand-dark-500 lowercase font-mono">
-                        Ref: {order.upiTxnId}
+                {(() => {
+                  const payStatus = localPaymentStatus || order.paymentStatus || 'pending';
+                  if (payStatus === 'paid') {
+                    return (
+                      <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                        Paid ({order.paymentMethod === 'stripe' ? 'Stripe' : order.paymentMethod.toUpperCase()})
                       </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">COD (Pending)</span>
-                )}
+                    );
+                  }
+                  if (payStatus === 'failed') {
+                    return (
+                      <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                        Failed ({order.paymentMethod.toUpperCase()})
+                      </span>
+                    );
+                  }
+                  if (payStatus === 'refunded') {
+                    return (
+                      <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        Refunded
+                      </span>
+                    );
+                  }
+                  // Fallback pending states
+                  if (order.paymentMethod === 'stripe') {
+                    return <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">Paid (Stripe)</span>;
+                  }
+                  if (order.paymentMethod === 'upi') {
+                    return (
+                      <>
+                        <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">
+                          UPI (Pending Verification)
+                        </span>
+                        {order.upiTxnId && (
+                          <span className="text-[10px] text-brand-dark-500 lowercase font-mono">
+                            Ref: {order.upiTxnId}
+                          </span>
+                        )}
+                      </>
+                    );
+                  }
+                  return (
+                    <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">
+                      COD (Pending)
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           </div>
