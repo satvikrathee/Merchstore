@@ -28,11 +28,20 @@ const UserDashboard = () => {
     dispatch(updateOrderStatusInList({
       orderId: payload.orderId,
       status: payload.status,
+      paymentStatus: payload.paymentStatus,
     }));
-    toast.success(`Your order #${payload.orderId.slice(-6)} is now ${payload.status}!`, {
-      icon: '📦',
-      duration: 4000,
-    });
+    if (payload.status) {
+      toast.success(`Your order #${payload.orderId.slice(-6)} is now ${payload.status}!`, {
+        icon: '📦',
+        duration: 4000,
+      });
+    }
+    if (payload.paymentStatus) {
+      toast.success(`Order #${payload.orderId.slice(-6)} payment status is now ${payload.paymentStatus}!`, {
+        icon: '💳',
+        duration: 4000,
+      });
+    }
   }, [dispatch]);
 
   useUserOrdersSocket(

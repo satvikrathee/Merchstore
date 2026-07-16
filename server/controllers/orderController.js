@@ -478,6 +478,13 @@ const updateOrderPaymentStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
+  // Emit real-time WebSocket event containing the updated payment status
+  emitOrderStatusUpdate(order._id.toString(), order.status, {
+    paymentStatus: order.paymentStatus,
+    note: `Payment status updated from '${previousPaymentStatus}' to '${paymentStatus}'`,
+    updatedBy: req.user.name,
+  });
+
   res.status(200).json({
     success: true,
     message: `Payment status updated to '${paymentStatus}'`,
