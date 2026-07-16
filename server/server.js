@@ -45,15 +45,18 @@ const allowedOrigins = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
+// In development, also permit any localhost origin for convenience
+const isDev = process.env.NODE_ENV !== 'production';
+
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, postman, curl)
+    // Allow requests with no origin (mobile apps, Postman, curl)
     if (!origin) return callback(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      origin.includes('localhost:') ||
-      origin.includes('127.0.0.1:')
-    ) {
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // Only allow bare localhost fallthrough in development
+    if (isDev && (origin.includes('localhost:') || origin.includes('127.0.0.1:'))) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'), false);
