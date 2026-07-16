@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search } from 'lucide-react';
+import { X } from 'lucide-react';
 
 const FilterSidebar = ({ filters, onFilterChange, onReset, onClose }) => {
   const categories = [
@@ -47,12 +47,9 @@ const FilterSidebar = ({ filters, onFilterChange, onReset, onClose }) => {
           Search
         </h4>
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-dark-400">
-            <Search className="w-4 h-4" />
-          </div>
           <input
             type="text"
-            className="input-field pl-9.5 py-2.5 text-sm"
+            className="input-field pl-3.5 py-2.5 text-sm"
             placeholder="Search products..."
             value={filters.search || ''}
             onChange={handleTextChange}

@@ -175,10 +175,23 @@ const addAddress = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * GET /api/auth/admin/users
+ * Get all registered users (Admin only)
+ */
+const getAllUsers = asyncHandler(async (req, res) => {
+  const users = await User.find({}).select('-password');
+  res.status(200).json({
+    success: true,
+    users,
+  });
+});
+
 module.exports = {
   register,
   login,
   getMe,
   googleCallback,
   addAddress,
+  getAllUsers,
 };

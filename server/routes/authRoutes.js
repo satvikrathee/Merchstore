@@ -4,7 +4,7 @@
 const router   = require('express').Router();
 const passport = require('passport');
 const validate = require('../middleware/validate');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireAdmin } = require('../middleware/authMiddleware');
 const { registerSchema, loginSchema } = require('../validators/authValidator');
 const {
   register,
@@ -12,6 +12,7 @@ const {
   getMe,
   googleCallback,
   addAddress,
+  getAllUsers,
 } = require('../controllers/authController');
 
 // Local auth routes
@@ -38,5 +39,8 @@ router.get('/me', protect, getMe);
 
 // Address endpoint
 router.post('/address', protect, addAddress);
+
+// Admin-only route to list all users
+router.get('/admin/users', protect, requireAdmin, getAllUsers);
 
 module.exports = router;

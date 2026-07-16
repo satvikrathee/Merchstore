@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X } from 'lucide-react';
+import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download } from 'lucide-react';
 import { fetchOrderById } from '../features/orders/orderSlice';
 import { useSocket } from '../hooks/useSocket';
 import Loader from '../components/Loader';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { downloadReceipt } from '../utils/receiptGenerator';
 
 const OrderConfirm = () => {
   const { orderId } = useParams();
@@ -91,6 +92,10 @@ const OrderConfirm = () => {
       </div>
     );
   }
+
+  const currentStatus = (localStatus || order.status || '').toLowerCase();
+  const currentPaymentStatus = (localPaymentStatus || order.paymentStatus || '').toLowerCase();
+  const showReceiptButton = currentStatus === 'delivered' && currentPaymentStatus === 'paid';
 
   const steps = [
     { title: 'Placed', icon: ShoppingBag, desc: 'We have received your order details.' },
@@ -321,10 +326,19 @@ const OrderConfirm = () => {
           </div>
 
           <div className="space-y-3 pt-2">
-            <Link to="/dashboard" className="w-full btn-primary py-3 text-sm font-semibold">
+            {showReceiptButton && (
+              <button 
+                onClick={() => downloadReceipt(order)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-[#7A1C1C] text-white hover:bg-[#611414] rounded-xl text-sm font-semibold shadow-sm transition-all"
+              >
+                <Download className="w-4 h-4" />
+                Download Receipt
+              </button>
+            )}
+            <Link to="/dashboard" className="w-full btn-secondary py-3 text-sm font-semibold text-center block">
               View Order History
             </Link>
-            <Link to="/products" className="w-full btn-secondary py-3 text-sm font-semibold">
+            <Link to="/products" className="w-full btn-secondary py-3 text-sm font-semibold flex items-center justify-center gap-1.5">
               Continue Shopping
               <ArrowRight className="w-4 h-4" />
             </Link>

@@ -206,7 +206,7 @@ const initStorage = () => {
       {
         _id: 'user_default',
         name: 'GU Student',
-        email: 'student@geeta.ac.in',
+        email: 'student@geetauniversity.edu.in',
         password: 'password123',
         role: 'student',
         addresses: [
@@ -274,8 +274,8 @@ if (useMock) {
           if (!name || !email || !password) return { error: 'Please provide all fields' };
           
           // University Domain Check
-          const isUniEmail = email.endsWith('@geeta.ac.in') || email.endsWith('@geetauniversity.ac.in');
-          if (!isUniEmail) return { error: 'Only Geeta University emails (@geeta.ac.in / @geetauniversity.ac.in) are allowed' };
+          const isUniEmail = email.endsWith('@geetauniversity.edu.in');
+          if (!isUniEmail) return { error: 'Only Geeta University emails (@geetauniversity.edu.in) are allowed' };
 
           const users = JSON.parse(localStorage.getItem('users') || '[]');
           if (users.find(u => u.email === email)) return { error: 'Email already registered' };
@@ -324,6 +324,26 @@ if (useMock) {
           return {
             data: {
               user: { _id: user._id, name: user.name, email: user.email, role: user.role, addresses: user.addresses }
+            }
+          };
+        });
+      }
+
+      if (url.includes('/auth/admin/users') && method === 'get') {
+        return simulateRequest(() => {
+          const user = getLoggedUser();
+          if (!user || user.role !== 'admin') {
+            return { error: 'Access denied. Administrator privilege required.', status: 403 };
+          }
+          const users = JSON.parse(localStorage.getItem('users') || '[]');
+          // Return users without passwords
+          const sanitized = users.map(u => {
+            const { password, ...rest } = u;
+            return rest;
+          });
+          return {
+            data: {
+              users: sanitized
             }
           };
         });

@@ -9,12 +9,21 @@ import {
   ArrowDownRight,
   Loader2,
   RefreshCw,
+  X,
+  Search,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  Mail,
+  Phone,
 } from 'lucide-react';
 import {
   fetchAnalyticsSummary,
   fetchRevenueAnalytics,
   fetchTopProductsAnalytics,
 } from '../../features/admin/adminSlice';
+import { downloadReceipt } from '../../utils/receiptGenerator';
+import api from '../../utils/api';
 
 const PERIOD_OPTIONS = [
   { label: 'Week', period: 'week', groupBy: 'day' },
@@ -28,6 +37,34 @@ const AdminAnalytics = () => {
   const { analytics, loading, error } = useSelector((state) => state.admin);
   const [activePeriod, setActivePeriod] = useState(PERIOD_OPTIONS[1]);
   const [lastUpdated, setLastUpdated] = useState(null);
+
+  // States for Users and Purchase History Modal
+  const [usersModalOpen, setUsersModalOpen] = useState(false);
+  const [usersList, setUsersList] = useState([]);
+  const [allOrders, setAllOrders] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [expandedUser, setExpandedUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchUsersAndOrders = async () => {
+    setUsersLoading(true);
+    try {
+      const [usersRes, ordersRes] = await Promise.all([
+        api.get('/auth/admin/users'),
+        api.get('/orders/admin/all', { params: { limit: 1000 } })
+      ]);
+      if (usersRes.data?.success) {
+        setUsersList(usersRes.data.users || []);
+      }
+      if (ordersRes.data?.success) {
+        setAllOrders(ordersRes.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load users or orders', err);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
 
   const loadAnalytics = useCallback(() => {
     dispatch(fetchAnalyticsSummary());
@@ -333,10 +370,14 @@ const AdminAnalytics = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card) => {
           const Icon = card.icon;
+          const isUsersCard = card.label === 'Total Users';
           return (
             <div
               key={card.label}
-              className="bg-[#12081a]/80 border border-white/5 p-5 rounded-2xl hover:border-[#d4af37]/20 transition-all duration-300"
+              onClick={isUsersCard ? () => { setUsersModalOpen(true); fetchUsersAndOrders(); } : undefined}
+              className={`bg-[#12081a]/80 border border-white/5 p-5 rounded-2xl hover:border-[#d4af37]/20 transition-all duration-300 ${
+                isUsersCard ? 'cursor-pointer hover:bg-[#1e102d] hover:scale-[1.01]' : ''
+              }`}
             >
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
@@ -412,6 +453,219 @@ const AdminAnalytics = () => {
           </div>
         </div>
       </div>
+
+      {/* Users & Purchase History Modal */}
+      {usersModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div 
+            onClick={() => setUsersModalOpen(false)} 
+            className="absolute inset-0"
+          />
+          <div className="relative bg-[#12081a] border border-[#d4af37]/20 rounded-3xl p-6 sm:p-8 shadow-premium w-full max-w-4xl max-h-[85vh] z-10 flex flex-col animate-slideUp text-left">
+            <button 
+              onClick={() => setUsersModalOpen(false)}
+              className="absolute top-6 right-6 p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-6">
+              <h3 className="font-display font-extrabold text-xl text-white">
+                Registered Users & Purchase History
+              </h3>
+              <p className="font-sans text-xs text-white/40 mt-1">
+                Monitor student & faculty accounts, view delivery details, and track individual order histories.
+              </p>
+            </div>
+
+            {/* Search filter */}
+            <div className="relative mb-5">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/30">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/20 outline-none focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/60 transition-all font-sans"
+                placeholder="Search users by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Scrollable list content */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+              {usersLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="w-8 h-8 text-[#d4af37] animate-spin" />
+                  <span className="text-xs text-white/40 font-medium font-sans">Fetching account details...</span>
+                </div>
+              ) : (
+                (() => {
+                  const filteredUsers = usersList.filter(user => 
+                    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+                  );
+
+                  if (filteredUsers.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-white/40 text-sm font-sans">
+                        No users found matching your search.
+                      </div>
+                    );
+                  }
+
+                  const getUserOrders = (userId) => {
+                    return allOrders.filter(order => {
+                      const orderUserId = typeof order.userId === 'object' && order.userId ? order.userId._id : order.userId;
+                      return orderUserId === userId;
+                    });
+                  };
+
+                  return filteredUsers.map((u) => {
+                    const orders = getUserOrders(u._id);
+                    const isExpanded = expandedUser === u._id;
+                    
+                    return (
+                      <div 
+                        key={u._id} 
+                        className={`border rounded-2xl overflow-hidden transition-all duration-200 ${
+                          isExpanded 
+                            ? 'border-[#d4af37]/30 bg-[#1d102b]/60' 
+                            : 'border-white/5 bg-white/[0.02] hover:border-white/10'
+                        }`}
+                      >
+                        {/* User Header Accordion Trigger */}
+                        <div 
+                          onClick={() => setExpandedUser(isExpanded ? null : u._id)}
+                          className="p-4 sm:p-5 flex justify-between items-center cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-10 h-10 rounded-full border border-white/10 bg-[#160c21] flex items-center justify-center font-display font-extrabold text-sm text-[#d4af37] shrink-0">
+                              {u.name ? u.name[0].toUpperCase() : 'U'}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-display font-bold text-sm text-white truncate">{u.name}</h4>
+                              <span className="font-sans text-[11px] text-white/40 truncate block">{u.email}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`px-2 py-0.5 border text-[9px] font-sans font-bold uppercase tracking-wider rounded-md ${
+                              u.role === 'admin' 
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                                : u.role === 'faculty' 
+                                ? 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}>
+                              {u.role}
+                            </span>
+                            <span className="text-[10px] text-white/30 font-medium font-sans">
+                              {orders.length} {orders.length === 1 ? 'order' : 'orders'}
+                            </span>
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-white/40" /> : <ChevronDown className="w-4 h-4 text-white/40" />}
+                          </div>
+                        </div>
+
+                        {/* User Expanded Body */}
+                        {isExpanded && (
+                          <div className="p-4 sm:p-5 pt-0 border-t border-white/5 grid grid-cols-1 md:grid-cols-12 gap-5 text-xs font-sans">
+                            {/* Left: Contact Info & Addresses (md:col-span-5) */}
+                            <div className="md:col-span-5 space-y-4">
+                              <div>
+                                <h5 className="font-bold text-[10px] uppercase tracking-wider text-white/40 mb-2">Account Profile</h5>
+                                <div className="space-y-1.5 text-white/70">
+                                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-white/30" /> {u.email}</p>
+                                  {u.phone && <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-white/30" /> {u.phone}</p>}
+                                </div>
+                              </div>
+
+                              <div>
+                                <h5 className="font-bold text-[10px] uppercase tracking-wider text-white/40 mb-2">Saved Addresses</h5>
+                                {!u.addresses || u.addresses.length === 0 ? (
+                                  <p className="text-white/30 italic">No addresses saved</p>
+                                ) : (
+                                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                                    {u.addresses.map((addr, idx) => (
+                                      <div key={idx} className="p-2.5 rounded-lg bg-white/5 border border-white/5 leading-relaxed text-white/70">
+                                        <p className="font-semibold text-[#d4af37] text-[11px]">{addr.fullName} {addr.isDefault && <span className="text-[9px] uppercase font-bold text-white/40 border border-white/10 px-1 rounded ml-1 bg-white/5">Default</span>}</p>
+                                        <p className="mt-0.5">{addr.street}</p>
+                                        <p>{addr.city}, {addr.state} - {addr.pincode}</p>
+                                        {addr.phone && <p className="text-[10px] text-white/40 mt-0.5">Ph: {addr.phone}</p>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right: Purchase History (md:col-span-7) */}
+                            <div className="md:col-span-7 space-y-3">
+                              <h5 className="font-bold text-[10px] uppercase tracking-wider text-white/40">Order History</h5>
+                              {orders.length === 0 ? (
+                                <p className="text-white/30 italic">This user hasn't placed any orders yet.</p>
+                              ) : (
+                                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                                  {orders.map((ord) => {
+                                    const isDeliveredAndPaid = ord.status?.toLowerCase() === 'delivered' && ord.paymentStatus?.toLowerCase() === 'paid';
+                                    
+                                    return (
+                                      <div key={ord._id} className="p-3 bg-white/5 border border-white/5 rounded-xl hover:border-white/10 transition-colors flex justify-between items-center gap-3">
+                                        <div className="space-y-1 text-left min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="font-bold text-[#d4af37] font-mono text-[11px]">#{ord._id.slice(-6).toUpperCase()}</span>
+                                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                              ord.status === 'delivered' 
+                                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                                : ord.status === 'shipped' 
+                                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                                                : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                                            }`}>
+                                              {ord.status}
+                                            </span>
+                                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                              ord.paymentStatus === 'paid' 
+                                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                            }`}>
+                                              {ord.paymentStatus || 'Pending'}
+                                            </span>
+                                          </div>
+                                          <p className="text-[10px] text-white/50 truncate max-w-xs">
+                                            {ord.items?.map(i => `${i.name} (${i.size}x${i.qty})`).join(', ')}
+                                          </p>
+                                          <p className="text-[9px] text-white/30">
+                                            {new Date(ord.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                          </p>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2 shrink-0">
+                                          <span className="font-bold text-white">₹{ord.totalAmount?.toLocaleString('en-IN')}.00</span>
+                                          {isDeliveredAndPaid && (
+                                            <button
+                                              onClick={() => downloadReceipt(ord)}
+                                              className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg border border-emerald-500/20 text-[9px] font-bold transition-all"
+                                              title="Download Receipt"
+                                            >
+                                              <Download className="w-2.5 h-2.5" />
+                                              Receipt
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

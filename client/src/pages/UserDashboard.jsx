@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, Navigate } from 'react-router-dom';
-import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut } from 'lucide-react';
+import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchUserOrders, updateOrderStatusInList } from '../features/orders/orderSlice';
 import { addAddress, logout } from '../features/auth/authSlice';
 import { useUserOrdersSocket } from '../hooks/useUserOrdersSocket';
 import Loader from '../components/Loader';
+import { downloadReceipt } from '../utils/receiptGenerator';
 
 const UserDashboard = () => {
   const dispatch = useDispatch();
@@ -256,6 +257,15 @@ const UserDashboard = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
+                        {ord.status?.toLowerCase() === 'delivered' && ord.paymentStatus?.toLowerCase() === 'paid' && (
+                          <button 
+                            onClick={() => downloadReceipt(ord)}
+                            className="p-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:text-white rounded-xl transition-all duration-200 border border-emerald-100"
+                            title="Download Receipt"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

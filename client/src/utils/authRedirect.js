@@ -1,7 +1,7 @@
 import toast from 'react-hot-toast';
 import { addToCart } from '../features/cart/cartSlice';
 
-export const GU_DOMAINS = ['@geeta.ac.in', '@geetauniversity.ac.in', '@geetauniversity.edu.in', '@geeta.edu'];
+export const GU_DOMAINS = ['@geetauniversity.edu.in'];
 
 export const isGUEmail = (email = '') =>
   GU_DOMAINS.some((domain) => email.toLowerCase().trim().endsWith(domain));

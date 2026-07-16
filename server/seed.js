@@ -46,14 +46,14 @@ const seedData = async () => {
     const users = await User.create([
       {
         name:     'GU Admin',
-        email:    'admin@geeta.edu',
+        email:    'admin@geetauniversity.edu.in',
         password: 'password123',
         role:     'admin',
         avatar:   'https://api.dicebear.com/7.x/adventurer/svg?seed=admin',
       },
       {
         name:     'Subham Nayak',
-        email:    'subham@geeta.edu',
+        email:    'subham@geetauniversity.edu.in',
         password: 'password123',
         role:     'student',
         phone:    '9876543210',
@@ -72,7 +72,7 @@ const seedData = async () => {
       },
       {
         name:     'Tanmay Singla',
-        email:    'tanmay@geeta.edu',
+        email:    'tanmay@geetauniversity.edu.in',
         password: 'password123',
         role:     'faculty',
         phone:    '9999988888',
@@ -85,9 +85,9 @@ const seedData = async () => {
     const facultyUser = users[2];
 
     console.log(`✅ Users created:
-      - Admin: admin@geeta.edu (password123)
-      - Student: subham@geeta.edu (password123)
-      - Faculty: tanmay@geeta.edu (password123)`);
+      - Admin: admin@geetauniversity.edu.in (password123)
+      - Student: subham@geetauniversity.edu.in (password123)
+      - Faculty: tanmay@geetauniversity.edu.in (password123)`);
 
     // ── 3. Create Products ──────────────────────────────────────────────────
     console.log('🛍️ Creating products catalog...');
