@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link, Navigate } from 'react-router-dom';
 import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fetchUserOrders, updateOrderStatusInList } from '../features/orders/orderSlice';
+import { fetchUserOrders, updateOrderStatusInList, cancelUserOrder } from '../features/orders/orderSlice';
 import { addAddress, logout } from '../features/auth/authSlice';
 import { useUserOrdersSocket } from '../hooks/useUserOrdersSocket';
 import Loader from '../components/Loader';
@@ -24,6 +24,19 @@ const UserDashboard = () => {
   useEffect(() => {
     dispatch(fetchUserOrders());
   }, [dispatch]);
+
+  const handleCancelOrder = (orderId) => {
+    if (window.confirm('Are you sure you want to cancel this order?')) {
+      dispatch(cancelUserOrder(orderId))
+        .unwrap()
+        .then((res) => {
+          toast.success(res.message || 'Order cancelled successfully');
+        })
+        .catch((err) => {
+          toast.error(err || 'Failed to cancel order');
+        });
+    }
+  };
 
   const handleOrderStatusUpdate = useCallback((payload) => {
     dispatch(updateOrderStatusInList({
@@ -88,11 +101,12 @@ const UserDashboard = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Placed': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Packed': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Shipped': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'Delivered': return 'bg-green-50 text-green-700 border-green-200';
+    switch (status?.toLowerCase()) {
+      case 'placed': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'packed': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'shipped': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'delivered': return 'bg-green-50 text-green-700 border-green-200';
+      case 'cancelled': return 'bg-rose-50 text-rose-700 border-rose-200';
       default: return 'bg-brand-dark-100 text-brand-dark-700 border-brand-dark-200';
     }
   };
@@ -245,8 +259,8 @@ const UserDashboard = () => {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
-                        <span className="font-sans font-black text-base text-brand-dark-950">
+                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+                        <span className="font-sans font-black text-base text-brand-dark-950 mr-1">
                           ₹{ord.totalAmount?.toLocaleString('en-IN')}.00
                         </span>
                         
@@ -257,6 +271,17 @@ const UserDashboard = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
+
+                        {ord.status?.toLowerCase() === 'placed' && (
+                          <button
+                            onClick={() => handleCancelOrder(ord._id)}
+                            className="px-3.5 py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-700 hover:text-white rounded-xl transition-all duration-200 border border-rose-100 font-sans font-bold text-xs"
+                            title="Cancel Order"
+                          >
+                            Cancel
+                          </button>
+                        )}
+
                         {ord.status?.toLowerCase() === 'delivered' && ord.paymentStatus?.toLowerCase() === 'paid' && (
                           <button 
                             onClick={() => downloadReceipt(ord)}

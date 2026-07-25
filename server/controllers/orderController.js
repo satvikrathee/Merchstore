@@ -9,7 +9,7 @@ const Coupon   = require('../models/Coupon');
 const { asyncHandler }       = require('../middleware/errorHandler');
 const { clearCartByUserId }  = require('./cartController');
 const { createPaymentIntent } = require('../services/stripeService');
-const { checkStockAvailability, decrementStock } = require('../services/inventoryService');
+const { checkStockAvailability, decrementStock, restoreStock } = require('../services/inventoryService');
 const { emitOrderStatusUpdate } = require('../socket/orderSocket');
 
 // ─── POST /api/orders/create ──────────────────────────────────────────────────
@@ -438,6 +438,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
+  // Restore inventory stock if status is cancelled
+  if (status === 'cancelled') {
+    await restoreStock(order.items);
+  }
+
   // Emit real-time WebSocket event
   emitOrderStatusUpdate(order._id.toString(), status, {
     note,
@@ -498,6 +503,60 @@ const updateOrderPaymentStatus = asyncHandler(async (req, res) => {
   });
 });
 
+// ─── PUT /api/orders/:id/cancel ──────────────────────────────────────────────
+const cancelOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const order = await Order.findById(id).populate('userId', 'name email');
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  // Authorization: check if this is the user's own order
+  if (order.userId._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+
+  // Business logic: can only cancel if status is 'placed'
+  if (order.status !== 'placed') {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot cancel an order that is already '${order.status}'`,
+    });
+  }
+
+  const previousStatus = order.status;
+  order.status = 'cancelled';
+  order.statusHistory.push({
+    status: 'cancelled',
+    timestamp: new Date(),
+    note: 'Order cancelled by customer',
+    updatedBy: req.user._id,
+  });
+
+  await order.save();
+
+  // Restore inventory stock
+  await restoreStock(order.items);
+
+  // Emit real-time WebSocket event
+  emitOrderStatusUpdate(order._id.toString(), 'cancelled', {
+    note: 'Order cancelled by customer',
+    updatedBy: req.user.name,
+    previousStatus,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Order cancelled successfully',
+    data: {
+      orderId:  order._id,
+      status:   order.status,
+      history:  order.statusHistory,
+    },
+  });
+});
+
 module.exports = {
   createOrder,
   getUserOrders,
@@ -505,4 +564,5 @@ module.exports = {
   adminGetOrders,
   updateOrderStatus,
   updateOrderPaymentStatus,
+  cancelOrder,
 };
