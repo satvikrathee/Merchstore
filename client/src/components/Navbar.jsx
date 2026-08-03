@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, ChevronDown, Smartphone } from 'lucide-react';
+import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, ChevronDown, Smartphone, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { fetchCart } from '../features/cart/cartSlice';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -141,6 +141,13 @@ const Navbar = () => {
                       <LayoutDashboard className="w-4 h-4" />
                       {user?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
                     </Link>
+                    <Link
+                      to="/settings"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-dark-700 hover:bg-brand-maroon-50 hover:text-brand-maroon-700 transition-colors font-medium"
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                      Settings
+                    </Link>
                     {/* Install App in dropdown — only when prompt is ready */}
                     {isInstallable && !isInstalled && (
                       <button
@@ -238,6 +245,13 @@ const Navbar = () => {
               >
                 <LayoutDashboard className="w-4 h-4 text-brand-dark-400" />
                 {user?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
+              </Link>
+              <Link
+                to="/settings"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-sans font-semibold text-sm text-brand-dark-700 hover:bg-brand-dark-50/70"
+              >
+                <SettingsIcon className="w-4 h-4 text-brand-dark-400" />
+                Settings
               </Link>
               <button
                 onClick={handleLogoutClick}

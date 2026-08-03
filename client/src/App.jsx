@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from 'react';
+import React, { useEffect, lazy, Suspense, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
@@ -9,6 +9,7 @@ import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoutes from './routes/AdminRoutes';
 import Loader from './components/Loader';
+import SplashScreen from './components/SplashScreen';
 
 // Pages — Lazy loaded for fast initial render
 const Home          = lazy(() => import('./pages/Home'));
@@ -23,6 +24,7 @@ const UserDashboard = lazy(() => import('./pages/UserDashboard'));
 const OAuthSuccess  = lazy(() => import('./pages/OAuthSuccess'));
 const AdminDashboard= lazy(() => import('./pages/admin/AdminDashboard'));
 const OrderReceipt  = lazy(() => import('./pages/OrderReceipt'));
+const Settings      = lazy(() => import('./pages/Settings'));
 
 // State Actions
 import { fetchCurrentUser } from './features/auth/authSlice';
@@ -105,6 +107,14 @@ function AppLayout() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/admin/*"
@@ -127,6 +137,7 @@ function AppLayout() {
 
 function App() {
   const dispatch = useDispatch();
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -135,10 +146,17 @@ function App() {
     }
   }, [dispatch]);
 
+  const handleSplashDone = useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
   return (
-    <Router>
-      <AppLayout />
-    </Router>
+    <>
+      {showSplash && <SplashScreen onDone={handleSplashDone} />}
+      <Router>
+        <AppLayout />
+      </Router>
+    </>
   );
 }
 
