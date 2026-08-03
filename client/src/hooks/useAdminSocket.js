@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 
-export const useAdminSocket = (onOrderStatusUpdate) => {
+export const useAdminSocket = (onOrderStatusUpdate, onOrderCreated) => {
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
     const token = localStorage.getItem('token');
@@ -19,8 +19,14 @@ export const useAdminSocket = (onOrderStatusUpdate) => {
       onOrderStatusUpdate(payload);
     });
 
+    socket.on('ORDER_CREATED', (payload) => {
+      if (onOrderCreated) {
+        onOrderCreated(payload);
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
-  }, [onOrderStatusUpdate]);
+  }, [onOrderStatusUpdate, onOrderCreated]);
 };

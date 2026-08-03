@@ -13,7 +13,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/tests/**/*.test.js"],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
     "collectCoverageFrom": [
       "controllers/**/*.js",
       "services/**/*.js",
@@ -37,6 +39,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
@@ -62,7 +65,13 @@
     "prettier": "^3.1.1",
     "supertest": "^6.3.3"
   },
-  "keywords": ["express", "mongodb", "stripe", "socket.io", "nodejs"],
+  "keywords": [
+    "express",
+    "mongodb",
+    "stripe",
+    "socket.io",
+    "nodejs"
+  ],
   "author": "Member 2 — Backend Engineer",
   "license": "ISC"
 }

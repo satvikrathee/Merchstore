@@ -10,6 +10,7 @@ const cors    = require('cors');
 const helmet  = require('helmet');
 const morgan  = require('morgan');
 const path    = require('path');
+const compression = require('compression');
 
 const connectDB             = require('./config/db');
 const { globalLimiter }     = require('./middleware/rateLimiter');
@@ -35,6 +36,20 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
+const dns = require("dns");
+
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
+// ── 0. Gzip Compression (must be FIRST — before any routes or static) ─────────
+app.use(compression({
+  level: 6,                    // compression level (1=fast, 9=best)
+  threshold: 1024,             // compress responses > 1KB only
+  filter: (req, res) => {
+    // Don't compress already-compressed Stripe webhook raw body
+    if (req.path === '/api/payment/webhook') return false;
+    return compression.filter(req, res);
+  },
+}));
 
 // ── 1. Security & CORS ───────────────────────────────────────────────────────
 app.use(helmet({

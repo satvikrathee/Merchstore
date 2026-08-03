@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+
+import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download, FileText, XCircle } from 'lucide-react';
+import { fetchOrderById } from '../features/orders/orderSlice';
+import { cancelOrder } from '../features/orders/orderSlice';
+
 import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download } from 'lucide-react';
 import { fetchOrderById, cancelUserOrder } from '../features/orders/orderSlice';
+
 import { useSocket } from '../hooks/useSocket';
 import Loader from '../components/Loader';
 import api from '../utils/api';
@@ -16,6 +22,9 @@ const OrderConfirm = () => {
   const { currentOrder: order, loading } = useSelector((state) => state.orders);
   const [localStatus, setLocalStatus] = useState('');
   const [localPaymentStatus, setLocalPaymentStatus] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Review states
   const [selectedProductForReview, setSelectedProductForReview] = useState(null);
@@ -109,8 +118,7 @@ const OrderConfirm = () => {
   }
 
   const currentStatus = (localStatus || order.status || '').toLowerCase();
-  const currentPaymentStatus = (localPaymentStatus || order.paymentStatus || '').toLowerCase();
-  const showReceiptButton = currentStatus === 'delivered' && currentPaymentStatus === 'paid';
+  const showReceiptButton = currentStatus !== 'cancelled';
 
   const subtotalVal = order.subtotal ?? order.totalAmount ?? 0;
   const discountVal = order.discount ?? order.discountAmount ?? 0;
@@ -387,15 +395,36 @@ const OrderConfirm = () => {
           </div>
 
           <div className="space-y-3 pt-2">
-            {showReceiptButton && (
-              <button 
-                onClick={() => downloadReceipt(order)}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-[#7A1C1C] text-white hover:bg-[#611414] rounded-xl text-sm font-semibold shadow-sm transition-all"
+            {/* Cancel Order Button — only for placed/packed orders */}
+            {['placed', 'packed'].includes(currentStatus) && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl text-sm font-semibold border border-red-200 transition-all"
               >
-                <Download className="w-4 h-4" />
-                Download Receipt
+                <XCircle className="w-4 h-4" />
+                Cancel This Order
               </button>
             )}
+
+            {showReceiptButton && (
+              <>
+                <Link
+                  to={`/order/${order._id}/receipt`}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-[#7A1C1C] text-white hover:bg-[#611414] rounded-xl text-sm font-semibold shadow-sm transition-all"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Official Receipt
+                </Link>
+                <button 
+                  onClick={() => downloadReceipt(order)}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-700 text-white hover:bg-emerald-800 rounded-xl text-sm font-semibold shadow-sm transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF / Print Receipt
+                </button>
+              </>
+            )}
+
 
             {currentStatus === 'placed' && (
               <button
@@ -498,6 +527,70 @@ const OrderConfirm = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Order Confirmation Modal ─────────────────────────────── */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark-950/40 backdrop-blur-md animate-fadeIn">
+          <div className="absolute inset-0" onClick={() => setShowCancelModal(false)} />
+          <div className="relative bg-white border border-brand-dark-100 rounded-3xl p-6 sm:p-8 shadow-xl w-full max-w-md z-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-50 rounded-xl">
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-lg text-brand-dark-900">Cancel Order?</h3>
+                <p className="font-sans text-xs text-brand-dark-500">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="font-sans text-sm text-brand-dark-600 mb-4">
+              Are you sure you want to cancel this order? Stock will be restored automatically.
+            </p>
+            <div className="mb-5">
+              <label className="font-sans text-xs font-bold uppercase tracking-wider text-brand-dark-500 block mb-1.5">
+                Reason <span className="text-brand-dark-400 font-normal normal-case">(optional)</span>
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Ordered by mistake..."
+                rows={3}
+                className="w-full border border-brand-dark-200 rounded-xl px-4 py-2.5 font-sans text-sm text-brand-dark-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-3 border border-brand-dark-200 text-brand-dark-700 hover:bg-brand-dark-50 rounded-xl font-sans text-sm font-semibold transition-all"
+              >
+                Keep Order
+              </button>
+              <button
+                disabled={isCancelling}
+                onClick={async () => {
+                  setIsCancelling(true);
+                  try {
+                    await dispatch(cancelOrder({ orderId, reason: cancelReason })).unwrap();
+                    setLocalStatus('cancelled');
+                    setShowCancelModal(false);
+                    toast.success('Order cancelled successfully!', { icon: '✅', duration: 4000 });
+                  } catch (err) {
+                    toast.error(err || 'Failed to cancel order');
+                  } finally {
+                    setIsCancelling(false);
+                  }
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-sans text-sm font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isCancelling ? (
+                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Cancelling...</>
+                ) : (
+                  <><XCircle className="w-4 h-4" />Yes, Cancel Order</>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

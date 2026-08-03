@@ -37,7 +37,15 @@ const AdminOrders = () => {
     }));
   }, [dispatch]);
 
-  useAdminSocket(handleSocketStatusUpdate);
+  const handleSocketOrderCreated = useCallback((payload) => {
+    toast.success(`🎉 New Order Placed by ${payload.customerName}! (₹${payload.finalAmount})`, {
+      duration: 5000,
+      position: 'top-right',
+    });
+    loadOrders();
+  }, []);
+
+  useAdminSocket(handleSocketStatusUpdate, handleSocketOrderCreated);
 
   const loadOrders = () => {
     dispatch(fetchAdminOrders({

@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, ChevronDown } from 'lucide-react';
+import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, ChevronDown, Smartphone, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { fetchCart } from '../features/cart/cartSlice';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
   const { isLoggedIn, user, logout } = useAuth();
+  const { isInstallable, isInstalled, installPWA } = usePWAInstall();
   const cartItems = useSelector((state) => state.cart.items);
 
   const [isOpen, setIsOpen] = useState(false);
@@ -90,6 +92,17 @@ const Navbar = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
+            {/* Install App button — shows only when browser has a real PWA prompt ready */}
+            {isInstallable && !isInstalled && (
+              <button
+                onClick={installPWA}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-maroon-700 text-white hover:bg-brand-maroon-600 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+                title="Install Geeta University MerchStore App"
+              >
+                <Smartphone className="w-4 h-4 text-brand-gold-400" />
+                <span>Install App</span>
+              </button>
+            )}
             <Link
               to="/cart"
               className="relative p-2.5 text-brand-dark-600 hover:text-brand-maroon-700 hover:bg-brand-maroon-50/60 rounded-2xl transition-all duration-300"
@@ -128,6 +141,23 @@ const Navbar = () => {
                       <LayoutDashboard className="w-4 h-4" />
                       {user?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
                     </Link>
+                    <Link
+                      to="/settings"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-dark-700 hover:bg-brand-maroon-50 hover:text-brand-maroon-700 transition-colors font-medium"
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                      Settings
+                    </Link>
+                    {/* Install App in dropdown — only when prompt is ready */}
+                    {isInstallable && !isInstalled && (
+                      <button
+                        onClick={installPWA}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-maroon-700 hover:bg-brand-maroon-50 transition-colors text-left font-semibold"
+                      >
+                        <Smartphone className="w-4 h-4 text-brand-maroon-700" />
+                        Install App
+                      </button>
+                    )}
                     <button
                       onClick={handleLogoutClick}
                       className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50/70 transition-colors text-left font-medium"
@@ -215,6 +245,13 @@ const Navbar = () => {
               >
                 <LayoutDashboard className="w-4 h-4 text-brand-dark-400" />
                 {user?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
+              </Link>
+              <Link
+                to="/settings"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-sans font-semibold text-sm text-brand-dark-700 hover:bg-brand-dark-50/70"
+              >
+                <SettingsIcon className="w-4 h-4 text-brand-dark-400" />
+                Settings
               </Link>
               <button
                 onClick={handleLogoutClick}
