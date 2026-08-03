@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag } from 'lucide-react';
+import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download, FileText, XCircle } from 'lucide-react';
 import { fetchOrderById } from '../features/orders/orderSlice';
+import { cancelOrder } from '../features/orders/orderSlice';
 import { useSocket } from '../hooks/useSocket';
 import Loader from '../components/Loader';
+import api from '../utils/api';
+import toast from 'react-hot-toast';
+import { downloadReceipt } from '../utils/receiptGenerator';
 
 const OrderConfirm = () => {
   const { orderId } = useParams();
@@ -12,6 +16,47 @@ const OrderConfirm = () => {
   
   const { currentOrder: order, loading } = useSelector((state) => state.orders);
   const [localStatus, setLocalStatus] = useState('');
+  const [localPaymentStatus, setLocalPaymentStatus] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Review states
+  const [selectedProductForReview, setSelectedProductForReview] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedProductForReview) return;
+
+    if (!reviewComment.trim()) {
+      toast.error('Please write a comment for your review.');
+      return;
+    }
+
+    if (reviewComment.trim().length < 10) {
+      toast.error('Comment must be at least 10 characters.');
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      await api.post(`/reviews/${selectedProductForReview.productId}`, {
+        rating: reviewRating,
+        comment: reviewComment,
+      });
+      toast.success('Thank you! Review posted successfully.');
+      setSelectedProductForReview(null);
+      setReviewComment('');
+      setReviewRating(5);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit review');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   // 1. Fetch Order on mount
   useEffect(() => {
@@ -22,12 +67,22 @@ const OrderConfirm = () => {
   useEffect(() => {
     if (order) {
       setLocalStatus(order.status);
+      setLocalPaymentStatus(order.paymentStatus || 'pending');
     }
   }, [order]);
 
   // 2. Connect mock websocket tracker
   useSocket(orderId, (update) => {
-    setLocalStatus(update.status);
+    if (update.status) {
+      setLocalStatus(update.status);
+    }
+    if (update.paymentStatus) {
+      setLocalPaymentStatus(update.paymentStatus);
+      toast.success(`Payment status updated to: ${update.paymentStatus}!`, {
+        icon: '💳',
+        duration: 4000
+      });
+    }
   });
 
   if (loading) return <Loader fullScreen />;
@@ -41,6 +96,14 @@ const OrderConfirm = () => {
       </div>
     );
   }
+
+  const currentStatus = (localStatus || order.status || '').toLowerCase();
+  const showReceiptButton = currentStatus !== 'cancelled';
+
+  const subtotalVal = order.subtotal ?? order.totalAmount ?? 0;
+  const discountVal = order.discount ?? order.discountAmount ?? 0;
+  const finalAmountVal = order.finalAmount ?? order.totalAmount ?? 0;
+  const deliveryFeeVal = finalAmountVal - subtotalVal + discountVal;
 
   const steps = [
     { title: 'Placed', icon: ShoppingBag, desc: 'We have received your order details.' },
@@ -56,7 +119,10 @@ const OrderConfirm = () => {
     const stepIdx = statuses.indexOf(stepTitle.toLowerCase());
 
     if (stepIdx < currentIdx) return 'completed';
-    if (stepIdx === currentIdx) return 'active';
+    if (stepIdx === currentIdx) {
+      if (currentStatus === 'delivered') return 'completed';
+      return 'active';
+    }
     return 'pending';
   };
 
@@ -157,6 +223,14 @@ const OrderConfirm = () => {
                   <span className="font-sans text-xs text-brand-dark-500 font-semibold mt-0.5 block">
                     Size: {item.size} | Qty: {item.qty}
                   </span>
+                  {(localStatus || order.status || '').toLowerCase() === 'delivered' && (
+                    <button
+                      onClick={() => setSelectedProductForReview(item)}
+                      className="text-xs font-semibold text-brand-maroon-700 hover:text-brand-maroon-800 hover:underline mt-1 block text-left"
+                    >
+                      Review Product
+                    </button>
+                  )}
                 </div>
                 <span className="font-sans font-bold text-sm text-brand-dark-950">
                   ₹{(item.price * item.qty).toLocaleString('en-IN')}.00
@@ -176,20 +250,63 @@ const OrderConfirm = () => {
             <div className="space-y-1 text-right">
               <span className="font-bold uppercase tracking-wider text-brand-dark-400">Payment Status</span>
               <div className="text-brand-dark-800 font-bold capitalize space-y-1 flex flex-col items-end">
-                {order.paymentMethod === 'stripe' ? (
-                  <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">Paid (Stripe)</span>
-                ) : order.paymentMethod === 'upi' ? (
-                  <>
-                    <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">UPI (Pending Verification)</span>
-                    {order.upiTxnId && (
-                      <span className="text-[10px] text-brand-dark-500 lowercase font-mono">
-                        Ref: {order.upiTxnId}
+                {(() => {
+                  const payStatus = localPaymentStatus || order.paymentStatus || 'pending';
+                  if (payStatus === 'paid') {
+                    return (
+                      <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                        Paid ({order.paymentMethod === 'stripe' ? 'Stripe' : order.paymentMethod.toUpperCase()})
                       </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">COD (Pending)</span>
-                )}
+                    );
+                  }
+                  if (payStatus === 'failed') {
+                    return (
+                      <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                        Failed ({order.paymentMethod.toUpperCase()})
+                      </span>
+                    );
+                  }
+                  if (payStatus === 'refunded') {
+                    return (
+                      <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        Refunded
+                      </span>
+                    );
+                  }
+                  // Fallback pending states
+                  if (order.paymentMethod === 'stripe') {
+                    return <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">Paid (Stripe)</span>;
+                  }
+                  if (order.paymentMethod === 'upi') {
+                    return (
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200 font-medium">
+                          UPI (Pending Verification)
+                        </span>
+                        {order.upiTxnId && (
+                          <span className="text-[10px] text-brand-dark-500 lowercase font-mono">
+                            Ref: {order.upiTxnId}
+                          </span>
+                        )}
+                        {order.upiScreenshot && (
+                          <a 
+                            href={order.upiScreenshot} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-[10px] text-brand-maroon-750 font-bold hover:underline flex items-center gap-1"
+                          >
+                            View Submitted Screenshot ↗
+                          </a>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <span className="text-brand-gold-800 bg-brand-gold-50 px-2 py-0.5 rounded border border-brand-gold-200">
+                      COD (Pending)
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -201,21 +318,21 @@ const OrderConfirm = () => {
             Payment Breakdown
           </h3>
 
-          <div className="space-y-4 text-xs font-sans font-semibold text-brand-dark-600 flex-grow">
+          <div class="space-y-4 text-xs font-sans font-semibold text-brand-dark-600 flex-grow">
             <div className="flex justify-between">
               <span>Items Total</span>
-              <span className="text-brand-dark-900">₹{order.subtotal?.toLocaleString('en-IN')}.00</span>
+              <span className="text-brand-dark-900">₹{subtotalVal?.toLocaleString('en-IN')}.00</span>
             </div>
             <div className="flex justify-between">
               <span>Delivery Fee</span>
               <span className="text-brand-dark-900">
-                {order.totalAmount - order.subtotal + (order.discount || 0) === 0 ? 'Free' : `₹${order.totalAmount - order.subtotal + (order.discount || 0)}.00`}
+                {deliveryFeeVal === 0 ? 'Free' : `₹${deliveryFeeVal?.toLocaleString('en-IN')}.00`}
               </span>
             </div>
-            {order.discount > 0 && (
+            {discountVal > 0 && (
               <div className="flex justify-between text-green-700 font-bold">
                 <span>Coupon Saved</span>
-                <span>- ₹{order.discount?.toLocaleString('en-IN')}.00</span>
+                <span>- ₹{discountVal?.toLocaleString('en-IN')}.00</span>
               </div>
             )}
 
@@ -224,22 +341,199 @@ const OrderConfirm = () => {
             <div className="flex justify-between items-baseline">
               <span className="font-display font-bold text-sm text-brand-dark-900">Paid Amount</span>
               <span className="font-sans font-black text-xl text-brand-maroon-700">
-                ₹{order.totalAmount?.toLocaleString('en-IN')}.00
+                ₹{finalAmountVal?.toLocaleString('en-IN')}.00
               </span>
             </div>
           </div>
 
           <div className="space-y-3 pt-2">
-            <Link to="/dashboard" className="w-full btn-primary py-3 text-sm font-semibold">
+            {/* Cancel Order Button — only for placed/packed orders */}
+            {['placed', 'packed'].includes(currentStatus) && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl text-sm font-semibold border border-red-200 transition-all"
+              >
+                <XCircle className="w-4 h-4" />
+                Cancel This Order
+              </button>
+            )}
+            {showReceiptButton && (
+              <>
+                <Link
+                  to={`/order/${order._id}/receipt`}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-[#7A1C1C] text-white hover:bg-[#611414] rounded-xl text-sm font-semibold shadow-sm transition-all"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Official Receipt
+                </Link>
+                <button 
+                  onClick={() => downloadReceipt(order)}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-700 text-white hover:bg-emerald-800 rounded-xl text-sm font-semibold shadow-sm transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF / Print Receipt
+                </button>
+              </>
+            )}
+            <Link to="/dashboard" className="w-full btn-secondary py-3 text-sm font-semibold text-center block">
               View Order History
             </Link>
-            <Link to="/products" className="w-full btn-secondary py-3 text-sm font-semibold">
+            <Link to="/products" className="w-full btn-secondary py-3 text-sm font-semibold flex items-center justify-center gap-1.5">
               Continue Shopping
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       </div>
+
+      {/* Review Dialog Modal */}
+      {selectedProductForReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark-950/40 backdrop-blur-md animate-fadeIn text-left">
+          <div 
+            onClick={() => setSelectedProductForReview(null)} 
+            className="absolute inset-0"
+          />
+          <div className="relative bg-white border border-brand-dark-100 rounded-3xl p-6 sm:p-8 shadow-premium w-full max-w-lg z-10 animate-slideUp">
+            <button 
+              onClick={() => setSelectedProductForReview(null)}
+              className="absolute top-4 right-4 p-2 text-brand-dark-400 hover:text-brand-dark-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-display font-black text-xl text-brand-dark-900 mb-2">
+              Review Product
+            </h3>
+            <p className="font-sans text-xs text-brand-dark-500 mb-6">
+              Share your thoughts on <strong className="text-brand-dark-800 font-bold">{selectedProductForReview.name}</strong> (Size: {selectedProductForReview.size}).
+            </p>
+
+            <form onSubmit={handleReviewSubmit} className="space-y-5">
+              {/* Star Selection */}
+              <div className="space-y-2">
+                <label className="block font-sans font-bold text-xxs uppercase tracking-wider text-brand-dark-700">
+                  Overall Rating
+                </label>
+                <div className="flex gap-1.5">
+                  {Array.from({ length: 5 }).map((_, idx) => {
+                    const starVal = idx + 1;
+                    return (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => setReviewRating(starVal)}
+                        className="p-1 hover:scale-115 transition-transform text-brand-gold-500 focus:outline-none"
+                      >
+                        <Star 
+                          className={`w-7 h-7 ${
+                            starVal <= reviewRating ? 'fill-brand-gold-500' : 'text-brand-dark-200'
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Comment text area */}
+              <div className="space-y-2">
+                <label className="block font-sans font-bold text-xxs uppercase tracking-wider text-brand-dark-700">
+                  Review Comments
+                </label>
+                <textarea
+                  rows="4"
+                  className="w-full border border-brand-dark-200 rounded-2xl p-4 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-brand-maroon-600/20 focus:border-brand-maroon-700 transition-all leading-relaxed"
+                  placeholder="What did you like or dislike about the fit, quality, or style?"
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                />
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductForReview(null)}
+                  className="px-5 py-2.5 bg-brand-dark-50 hover:bg-brand-dark-100 text-brand-dark-700 font-sans font-bold text-xs rounded-xl border border-brand-dark-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReview}
+                  className="px-6 py-2.5 bg-brand-maroon-700 hover:bg-brand-maroon-600 disabled:bg-brand-maroon-400 text-white font-sans font-bold text-xs rounded-xl shadow-premium transition-all"
+                >
+                  {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Order Confirmation Modal ─────────────────────────────── */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark-950/40 backdrop-blur-md animate-fadeIn">
+          <div className="absolute inset-0" onClick={() => setShowCancelModal(false)} />
+          <div className="relative bg-white border border-brand-dark-100 rounded-3xl p-6 sm:p-8 shadow-xl w-full max-w-md z-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-50 rounded-xl">
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-lg text-brand-dark-900">Cancel Order?</h3>
+                <p className="font-sans text-xs text-brand-dark-500">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="font-sans text-sm text-brand-dark-600 mb-4">
+              Are you sure you want to cancel this order? Stock will be restored automatically.
+            </p>
+            <div className="mb-5">
+              <label className="font-sans text-xs font-bold uppercase tracking-wider text-brand-dark-500 block mb-1.5">
+                Reason <span className="text-brand-dark-400 font-normal normal-case">(optional)</span>
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Ordered by mistake..."
+                rows={3}
+                className="w-full border border-brand-dark-200 rounded-xl px-4 py-2.5 font-sans text-sm text-brand-dark-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-3 border border-brand-dark-200 text-brand-dark-700 hover:bg-brand-dark-50 rounded-xl font-sans text-sm font-semibold transition-all"
+              >
+                Keep Order
+              </button>
+              <button
+                disabled={isCancelling}
+                onClick={async () => {
+                  setIsCancelling(true);
+                  try {
+                    await dispatch(cancelOrder({ orderId, reason: cancelReason })).unwrap();
+                    setLocalStatus('cancelled');
+                    setShowCancelModal(false);
+                    toast.success('Order cancelled successfully!', { icon: '✅', duration: 4000 });
+                  } catch (err) {
+                    toast.error(err || 'Failed to cancel order');
+                  } finally {
+                    setIsCancelling(false);
+                  }
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-sans text-sm font-semibold transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isCancelling ? (
+                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Cancelling...</>
+                ) : (
+                  <><XCircle className="w-4 h-4" />Yes, Cancel Order</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

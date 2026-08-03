@@ -206,7 +206,7 @@ const initStorage = () => {
       {
         _id: 'user_default',
         name: 'GU Student',
-        email: 'student@geeta.ac.in',
+        email: 'student@geetauniversity.edu.in',
         password: 'password123',
         role: 'student',
         addresses: [
@@ -258,7 +258,12 @@ if (useMock) {
     config.adapter = async (config) => {
       const url = config.url || '';
       const method = (config.method || 'get').toLowerCase();
-      const data = config.data ? JSON.parse(config.data) : null;
+      let data = null;
+      try {
+        data = config.data && typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+      } catch (err) {
+        data = config.data;
+      }
       
       const getLoggedUser = () => {
         const token = localStorage.getItem('token');
@@ -274,8 +279,8 @@ if (useMock) {
           if (!name || !email || !password) return { error: 'Please provide all fields' };
           
           // University Domain Check
-          const isUniEmail = email.endsWith('@geeta.ac.in') || email.endsWith('@geetauniversity.ac.in');
-          if (!isUniEmail) return { error: 'Only Geeta University emails (@geeta.ac.in / @geetauniversity.ac.in) are allowed' };
+          const isUniEmail = email.endsWith('@geetauniversity.edu.in');
+          if (!isUniEmail) return { error: 'Only Geeta University emails (@geetauniversity.edu.in) are allowed' };
 
           const users = JSON.parse(localStorage.getItem('users') || '[]');
           if (users.find(u => u.email === email)) return { error: 'Email already registered' };
@@ -324,6 +329,26 @@ if (useMock) {
           return {
             data: {
               user: { _id: user._id, name: user.name, email: user.email, role: user.role, addresses: user.addresses }
+            }
+          };
+        });
+      }
+
+      if (url.includes('/auth/admin/users') && method === 'get') {
+        return simulateRequest(() => {
+          const user = getLoggedUser();
+          if (!user || user.role !== 'admin') {
+            return { error: 'Access denied. Administrator privilege required.', status: 403 };
+          }
+          const users = JSON.parse(localStorage.getItem('users') || '[]');
+          // Return users without passwords
+          const sanitized = users.map(u => {
+            const { password, ...rest } = u;
+            return rest;
+          });
+          return {
+            data: {
+              users: sanitized
             }
           };
         });
@@ -510,13 +535,25 @@ if (useMock) {
         });
       }
 
+      if (url.includes('/orders/upload-screenshot') && method === 'post') {
+        return simulateRequest(() => {
+          return {
+            status: 200,
+            data: {
+              success: true,
+              url: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=600'
+            }
+          };
+        });
+      }
+
       // 5. ORDER CREATION & TRACKING
       if (url.includes('/orders/create') && method === 'post') {
         return simulateRequest(() => {
           const user = getLoggedUser();
           if (!user) return { error: 'Login required', status: 401 };
 
-          const { address, paymentMethod, couponCode, upiTxnId } = data;
+          const { address, paymentMethod, couponCode, upiTxnId, upiScreenshot } = data;
           const cartKey = `cart_${user.email}`;
           const cartItems = JSON.parse(localStorage.getItem(cartKey) || '[]');
           if (cartItems.length === 0) return { error: 'Cart is empty' };
@@ -581,6 +618,7 @@ if (useMock) {
             status: 'Placed',
             address,
             upiTxnId,
+            upiScreenshot,
             createdAt: new Date().toISOString()
           };
           orders.push(newOrder);

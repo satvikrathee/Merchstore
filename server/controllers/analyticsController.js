@@ -11,6 +11,7 @@ const {
   buildRevenuePipeline,
   buildTopProductsPipeline,
   percentChange,
+  fillRevenueGaps,
 } = require('../utils/analyticsHelpers');
 
 // ─── GET /api/admin/analytics/revenue ────────────────────────────────────────

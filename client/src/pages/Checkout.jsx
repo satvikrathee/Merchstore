@@ -4,12 +4,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Check, CreditCard, ShoppingBag, MapPin, Tag, Landmark, Loader2, ArrowRight, QrCode } from 'lucide-react';
+import { Check, CreditCard, ShoppingBag, MapPin, Tag, Landmark, Loader2, ArrowRight, QrCode, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchCart } from '../features/cart/cartSlice';
 import { createOrder, validateCoupon, clearCoupon } from '../features/orders/orderSlice';
 import { addAddress } from '../features/auth/authSlice';
 import Loader from '../components/Loader';
+import api from '../utils/api';
+import upiQrImage from '../assets/upi_qr.jpg';
 
 // Address Validator Schema
 const addressSchema = z.object({
@@ -41,7 +43,64 @@ const Checkout = () => {
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [upiTxnId, setUpiTxnId] = useState('');
+  const [upiScreenshot, setUpiScreenshot] = useState('');
+  const [isUploadingScreenshot, setIsUploadingScreenshot] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const handleScreenshotUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Only JPG, JPEG, PNG, and WEBP images are allowed.');
+      return;
+    }
+
+    // Validate size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('screenshot', file);
+
+    setIsUploadingScreenshot(true);
+    try {
+      const response = await api.post('/orders/upload-screenshot', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      if (response.data?.success) {
+        setUpiScreenshot(response.data.url);
+        toast.success('Screenshot uploaded successfully!');
+      } else {
+        toast.error('Failed to upload screenshot.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Error uploading screenshot.');
+    } finally {
+      setIsUploadingScreenshot(false);
+    }
+  };
+
+  const handleContinueToReview = () => {
+    if (paymentMethod === 'upi') {
+      if (!upiTxnId || !/^\d{12}$/.test(upiTxnId)) {
+        toast.error('Please enter a valid 12-digit UPI Transaction ID.');
+        return;
+      }
+      if (!upiScreenshot) {
+        toast.error('Please upload your payment screenshot before proceeding.');
+        return;
+      }
+    }
+    setStep(3);
+  };
 
   const {
     register,
@@ -181,7 +240,12 @@ const Checkout = () => {
         toast.error('Please enter a valid 12-digit UPI Transaction ID.');
         return;
       }
+      if (!upiScreenshot) {
+        toast.error('Please upload your payment screenshot.');
+        return;
+      }
       orderPayload.upiTxnId = upiTxnId;
+      orderPayload.upiScreenshot = upiScreenshot;
       setIsProcessingPayment(true);
 
       // Simulate UPI reference check
@@ -562,15 +626,13 @@ const Checkout = () => {
                     UPI Payment Details
                   </h4>
                   <div className="flex flex-col items-center gap-3 bg-white p-4 rounded-xl border border-brand-dark-150">
-                    <p className="font-sans text-xs text-brand-dark-600 text-center">
+                    <p className="font-sans text-xs text-brand-dark-600 text-center font-semibold">
                       Scan this QR code using any UPI app (GPay, PhonePe, Paytm, BHIM) to pay **₹{total.toLocaleString('en-IN')}.00**
                     </p>
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                        `upi://pay?pa=merch@geetauniversity.ac.in&pn=Geeta%20University%20MerchStore&am=${total}&cu=INR&tn=GU%20MerchStore%20Order`
-                      )}`} 
+                      src={upiQrImage} 
                       alt="UPI QR Code" 
-                      className="w-40 h-40 object-contain border border-brand-dark-100 rounded-lg p-1 bg-white"
+                      className="w-48 h-48 object-contain border border-brand-dark-100 rounded-lg p-1 bg-white"
                     />
                     <span className="font-display font-bold text-xs text-brand-dark-850">
                       UPI VPA: merch@geetauniversity.ac.in
@@ -578,7 +640,7 @@ const Checkout = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="block text-left text-xs font-bold text-brand-dark-700">
-                      UPI Transaction ID / Ref No (12 Digits)
+                      UPI Transaction ID / Ref No (12 Digits) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -588,6 +650,49 @@ const Checkout = () => {
                       className="input-field text-sm py-2.5"
                       placeholder="e.g. 123456789012"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-left text-xs font-bold text-brand-dark-700">
+                      Payment Screenshot <span className="text-red-500">*</span>
+                    </label>
+                    {upiScreenshot ? (
+                      <div className="relative border border-brand-dark-200 rounded-xl p-2 bg-white flex flex-col items-center">
+                        <img 
+                          src={upiScreenshot} 
+                          alt="Payment Screenshot Preview" 
+                          className="max-h-40 object-contain rounded-lg mb-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setUpiScreenshot('')}
+                          className="btn-secondary py-1 px-3 text-[10px] text-rose-600 border-rose-250 hover:bg-rose-50"
+                        >
+                          Remove Screenshot
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-brand-dark-300 hover:border-brand-dark-400 rounded-xl p-4 bg-white transition-colors cursor-pointer text-center relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleScreenshotUpload}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          disabled={isUploadingScreenshot}
+                        />
+                        {isUploadingScreenshot ? (
+                          <div className="flex flex-col items-center justify-center gap-2 py-2">
+                            <Loader2 className="w-5.5 h-5.5 text-brand-maroon-700 animate-spin" />
+                            <span className="text-xs text-brand-dark-600">Uploading screenshot...</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-1 py-2">
+                            <Upload className="w-6 h-6 text-brand-dark-400 mb-1" />
+                            <span className="text-xs font-semibold text-brand-dark-700">Click to upload payment screenshot</span>
+                            <span className="text-[10px] text-brand-dark-500">PNG, JPG, JPEG, WEBP up to 5MB</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -600,7 +705,7 @@ const Checkout = () => {
                   Back
                 </button>
                 <button
-                  onClick={() => setStep(3)}
+                  onClick={handleContinueToReview}
                   className="btn-primary py-2.5 px-6 text-xs font-semibold"
                 >
                   Continue to Review

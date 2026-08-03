@@ -21,7 +21,7 @@ const addressSnapshotSchema = new mongoose.Schema({
   pincode:   { type: String, required: true },
 }, { _id: false });
 
-const ORDER_STATUS = ['placed', 'packed', 'shipped', 'delivered', 'cancelled'];
+const ORDER_STATUS = ['placed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned', 'fraudulent'];
 const PAYMENT_STATUS = ['pending', 'paid', 'failed', 'refunded'];
 const PAYMENT_METHODS = ['stripe', 'cod', 'upi'];
 
@@ -43,9 +43,11 @@ const orderSchema = new mongoose.Schema({
   stripePaymentIntentId: { type: String, default: null, sparse: true },
   stripeIdempotencyKey:  { type: String, default: null },
   upiTxnId:              { type: String, default: null, trim: true },
+  upiScreenshot:         { type: String, default: null, trim: true },
 
   status:  { type: String, enum: ORDER_STATUS, default: 'placed' },
   address: { type: addressSnapshotSchema, required: true },
+  fakeCounted: { type: Boolean, default: false },
 
   // Status history for timeline
   statusHistory: [{

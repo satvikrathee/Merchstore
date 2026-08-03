@@ -5,22 +5,27 @@ const router = require('express').Router();
 const { protect, requireAdmin } = require('../middleware/authMiddleware');
 const { orderLimiter }          = require('../middleware/rateLimiter');
 const validate                  = require('../middleware/validate');
+const { upload }                = require('../utils/cloudinaryUpload');
 const {
   createOrder,
   getUserOrders,
   getSingleOrder,
   adminGetOrders,
   updateOrderStatus,
+  updateOrderPaymentStatus,
+  cancelUserOrder,
 } = require('../controllers/orderController');
 const {
   createOrderSchema,
   updateOrderStatusSchema,
+  updateOrderPaymentStatusSchema,
   adminOrdersQuerySchema,
 } = require('../validators/orderValidator');
 
 // ── User routes ───────────────────────────────────────────────────────────────
 // IMPORTANT: /single/:orderId must come BEFORE /:userId to avoid route collision
 router.get('/single/:orderId', protect, getSingleOrder);
+router.put('/:id/cancel', protect, cancelUserOrder);
 
 router.post(
   '/create',
@@ -28,6 +33,21 @@ router.post(
   orderLimiter,                     // 10 req/min per user
   validate(createOrderSchema),
   createOrder
+);
+
+router.post(
+  '/upload-screenshot',
+  protect,
+  upload.single('screenshot'),
+  (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    res.status(200).json({
+      success: true,
+      url: req.file.path,
+    });
+  }
 );
 
 router.get('/:userId', protect, getUserOrders);
@@ -47,6 +67,14 @@ router.put(
   requireAdmin,
   validate(updateOrderStatusSchema),
   updateOrderStatus
+);
+
+router.put(
+  '/admin/:id/payment-status',
+  protect,
+  requireAdmin,
+  validate(updateOrderPaymentStatusSchema),
+  updateOrderPaymentStatus
 );
 
 module.exports = router;

@@ -175,10 +175,50 @@ const addAddress = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * GET /api/auth/admin/users
+ * Get all registered users (Admin only)
+ */
+const getAllUsers = asyncHandler(async (req, res) => {
+  const users = await User.find({}).select('-password');
+  res.status(200).json({
+    success: true,
+    users,
+  });
+});
+
+/**
+ * PUT /api/auth/admin/users/:id/unrestrict
+ * Unrestrict a blocked user and reset their fake order count (Admin only)
+ */
+const unrestrictUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'User not found' });
+  }
+
+  user.isRestricted = false;
+  user.fakeOrderCount = 0;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'User has been unrestricted successfully',
+    user: {
+      _id: user._id,
+      name: user.name,
+      isRestricted: user.isRestricted,
+      fakeOrderCount: user.fakeOrderCount,
+    }
+  });
+});
+
 module.exports = {
   register,
   login,
   getMe,
   googleCallback,
   addAddress,
+  getAllUsers,
+  unrestrictUser,
 };

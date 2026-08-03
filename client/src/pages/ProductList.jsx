@@ -10,7 +10,7 @@ const ProductList = () => {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const { items: products, loading, filters } = useSelector((state) => state.products);
-  const safeProducts = Array.isArray(products) ? products : [];
+  const safeProducts = Array.isArray(products) ? products.filter((p) => p.isActive !== false) : [];
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   // 1. Sync URL query parameters to Redux state on load
@@ -55,10 +55,8 @@ const ProductList = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-screen">
       {/* Page Title */}
       <div className="text-left mb-8">
-        <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand-dark-900 tracking-tight">
-          University Catalog
-        </h1>
-        <p className="font-sans text-sm text-brand-dark-500 mt-2">
+        <h1 className="section-heading">University Catalog</h1>
+        <p className="section-subheading">
           Discover certified apparel, backpacks, caps, and campus accessories.
         </p>
       </div>

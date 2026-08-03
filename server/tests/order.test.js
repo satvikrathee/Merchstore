@@ -201,6 +201,7 @@ describe('OrderController', () => {
         finalAmount: 998,
         status:      'placed',
         upiTxnId:    '123456789012',
+        upiScreenshot: 'http://cloudinary.com/screenshot.jpg',
       };
 
       Order.create = jest.fn().mockResolvedValue([mockOrderDoc]);
@@ -208,7 +209,7 @@ describe('OrderController', () => {
 
       const req = {
         user: mockUser,
-        body: { address: sampleAddress, paymentMethod: 'upi', upiTxnId: '123456789012' },
+        body: { address: sampleAddress, paymentMethod: 'upi', upiTxnId: '123456789012', upiScreenshot: 'http://cloudinary.com/screenshot.jpg' },
       };
       const res = mockRes();
 

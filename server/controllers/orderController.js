@@ -9,8 +9,61 @@ const Coupon   = require('../models/Coupon');
 const { asyncHandler }       = require('../middleware/errorHandler');
 const { clearCartByUserId }  = require('./cartController');
 const { createPaymentIntent } = require('../services/stripeService');
-const { checkStockAvailability, decrementStock } = require('../services/inventoryService');
-const { emitOrderStatusUpdate } = require('../socket/orderSocket');
+const { checkStockAvailability, decrementStock, restoreStock } = require('../services/inventoryService');
+const { emitOrderStatusUpdate, emitOrderCreated } = require('../socket/orderSocket');
+const { sendEmail, buildOrderReceiptHTML } = require('../services/emailService');
+const { sendOrderSMS } = require('../services/smsService');
+
+// ── Fire-and-forget receipt email (never throws to caller) ─────────────────────
+const sendReceiptEmail = (order, user) => {
+  try {
+    const html = buildOrderReceiptHTML(order, user);
+    sendEmail(
+      user.email,
+      `🎓 Order Confirmed — #${order._id.toString().slice(-10).toUpperCase()} | Geeta University MerchStore`,
+      html
+    ).catch(err => console.error('📧 Receipt email failed:', err.message));
+  } catch (err) {
+    console.error('📧 Receipt email build failed:', err.message);
+  }
+};
+
+// ── Fire-and-forget admin notification email ───────────────────────────────────
+const sendAdminNotificationEmail = (order, user) => {
+  try {
+    const adminEmail = process.env.ALERT_EMAIL || 'admin@geetauniversity.ac.in';
+    const shortId = order._id.toString().slice(-10).toUpperCase();
+    const itemsList = order.items.map(item => `<li>${item.name} (${item.size}) x ${item.qty} - ₹${item.price}</li>`).join('');
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; max-width: 600px;">
+        <h2 style="color: #6b1414; margin: 0 0 10px;">🔔 New Order Placed</h2>
+        <p>A new order has been received on the Geeta University MerchStore.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 15px 0;">
+        <p><strong>Order ID:</strong> #${shortId} (${order._id})</p>
+        <p><strong>Customer:</strong> ${user.name} (${user.email})</p>
+        <p><strong>Total Amount:</strong> ₹${order.finalAmount}</p>
+        <p><strong>Payment Method:</strong> ${order.paymentMethod.toUpperCase()}</p>
+        <p><strong>Shipping Address:</strong> ${order.address?.street || 'N/A'}, ${order.address?.city || 'N/A'}, ${order.address?.state || 'N/A'} - ${order.address?.pincode || 'N/A'}</p>
+        <h3 style="color: #334155; margin-top: 20px;">Items:</h3>
+        <ul>${itemsList}</ul>
+        <br>
+        <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/orders" 
+           style="background-color: #6b1414; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+          Go to Admin Dashboard
+        </a>
+      </div>
+    `;
+    
+    sendEmail(
+      adminEmail,
+      `🔔 New Order Received — #${shortId} | ₹${order.finalAmount}`,
+      html
+    ).catch(err => console.error('📧 Admin notification email failed:', err.message));
+  } catch (err) {
+    console.error('📧 Admin notification email build failed:', err.message);
+  }
+};
 
 // ─── POST /api/orders/create ──────────────────────────────────────────────────
 const resolveOrderAddress = (savedAddress, user) => {
@@ -42,6 +95,15 @@ const resolveOrderAddress = (savedAddress, user) => {
 const createOrder = asyncHandler(async (req, res) => {
   const { address, addressId, paymentMethod, couponCode } = req.body;
   const userId = req.user._id;
+
+  // ── Block restricted users ──
+  const fullUser = await User.findById(userId).select('isRestricted');
+  if (fullUser && fullUser.isRestricted) {
+    return res.status(403).json({
+      success: false,
+      message: 'Your account has been restricted due to repeated cancelled/fake orders. Contact support.'
+    });
+  }
 
   let resolvedAddress = address;
 
@@ -177,6 +239,7 @@ const createOrder = asyncHandler(async (req, res) => {
         address:        resolvedAddress,
         stripeIdempotencyKey: paymentMethod === 'stripe' ? idempotencyKey : null,
         upiTxnId:       paymentMethod === 'upi' ? req.body.upiTxnId : null,
+        upiScreenshot:  paymentMethod === 'upi' ? req.body.upiScreenshot : null,
         statusHistory:  [{ status: 'placed', timestamp: new Date(), note: 'Order placed' }],
       };
 
@@ -240,7 +303,27 @@ const createOrder = asyncHandler(async (req, res) => {
       }
     });
 
+    // ── Fetch user for email (req.user may lack email) ────────────────────────
+    let emailUser = null;
+    try {
+      emailUser = await User.findById(userId).select('name email').lean();
+    } catch (_) { /* non-critical */ }
+
+    if (savedOrder) {
+      // Send real-time socket notification to admin
+      emitOrderCreated(savedOrder);
+      
+      // Send email notification to admin
+      if (emailUser) {
+        sendAdminNotificationEmail(savedOrder, emailUser);
+      }
+
+      // Send SMS notification to customer phone
+      sendOrderSMS(savedOrder, resolvedAddress).catch(err => console.error('📱 SMS trigger error:', err.message));
+    }
+
     if (paymentMethod === 'stripe' && savedOrder) {
+      if (emailUser) sendReceiptEmail(savedOrder, emailUser);
       return res.status(201).json({
         success: true,
         message: 'Order initiated — complete payment',
@@ -257,6 +340,7 @@ const createOrder = asyncHandler(async (req, res) => {
 
     // COD response (outside transaction block)
     if (paymentMethod === 'cod' && savedOrder) {
+      if (emailUser) sendReceiptEmail(savedOrder, emailUser);
       return res.status(201).json({
         success: true,
         message: 'Order placed successfully (Cash on Delivery)',
@@ -272,6 +356,7 @@ const createOrder = asyncHandler(async (req, res) => {
 
     // UPI response (outside transaction block)
     if (paymentMethod === 'upi' && savedOrder) {
+      if (emailUser) sendReceiptEmail(savedOrder, emailUser);
       return res.status(201).json({
         success: true,
         message: 'Order placed successfully (UPI Payment)',
@@ -435,6 +520,19 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     updatedBy: req.user._id,
   });
 
+  // ── Check for abusive statuses ──
+  if (['cancelled', 'returned', 'fraudulent'].includes(status) && !order.fakeCounted) {
+    const orderUser = await User.findById(order.userId._id);
+    if (orderUser) {
+      orderUser.fakeOrderCount = (orderUser.fakeOrderCount || 0) + 1;
+      if (orderUser.fakeOrderCount >= 5) {
+        orderUser.isRestricted = true;
+      }
+      await orderUser.save();
+    }
+    order.fakeCounted = true;
+  }
+
   await order.save();
 
   // Emit real-time WebSocket event
@@ -455,10 +553,110 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   });
 });
 
+// ─── PUT /api/admin/orders/:id/payment-status ─────────────────────────────────
+const updateOrderPaymentStatus = asyncHandler(async (req, res) => {
+  const { paymentStatus } = req.body;
+  const { id }            = req.params;
+
+  const order = await Order.findById(id).populate('userId', 'name email');
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  const previousPaymentStatus = order.paymentStatus;
+  order.paymentStatus = paymentStatus;
+
+  order.statusHistory.push({
+    status: order.status,
+    timestamp: new Date(),
+    note: `Payment status updated from '${previousPaymentStatus}' to '${paymentStatus}'`,
+    updatedBy: req.user._id,
+  });
+
+  await order.save();
+
+  // Emit real-time WebSocket event containing the updated payment status
+  emitOrderStatusUpdate(order._id.toString(), order.status, {
+    paymentStatus: order.paymentStatus,
+    note: `Payment status updated from '${previousPaymentStatus}' to '${paymentStatus}'`,
+    updatedBy: req.user.name,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: `Payment status updated to '${paymentStatus}'`,
+    data: {
+      orderId:       order._id,
+      paymentStatus: order.paymentStatus,
+      status:        order.status,
+      history:       order.statusHistory,
+    },
+  });
+});
+
+// ─── PUT /api/orders/:id/cancel ────────────────────────────────────────────────
+const cancelUserOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user._id;
+
+  const order = await Order.findById(id);
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  // Ensure order belongs to logged-in user (or admin)
+  if (order.userId.toString() !== userId.toString() && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Not authorized to cancel this order' });
+  }
+
+  // Check if order can be cancelled
+  if (['shipped', 'delivered', 'cancelled', 'returned'].includes(order.status)) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot cancel order with status '${order.status}'. Only placed or packed orders can be cancelled.`,
+    });
+  }
+
+  const previousStatus = order.status;
+  order.status = 'cancelled';
+  order.statusHistory.push({
+    status: 'cancelled',
+    timestamp: new Date(),
+    note: req.body?.reason ? `Cancelled by User: ${req.body.reason}` : 'Cancelled by User',
+    updatedBy: req.user._id,
+  });
+
+  await order.save();
+
+  // Restore inventory stock
+  try {
+    await restoreStock(order.items);
+  } catch (err) {
+    console.error('⚠️ Failed to restore stock on order cancellation:', err.message);
+  }
+
+  // Emit WebSocket event to update UI in real time
+  emitOrderStatusUpdate(order._id.toString(), 'cancelled', {
+    note: 'Cancelled by User',
+    updatedBy: req.user.name || 'Customer',
+    previousStatus,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Order cancelled successfully and stock restored',
+    order,
+  });
+});
+
 module.exports = {
   createOrder,
   getUserOrders,
   getSingleOrder,
   adminGetOrders,
   updateOrderStatus,
+  updateOrderPaymentStatus,
+  cancelUserOrder,
 };

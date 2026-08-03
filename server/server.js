@@ -9,6 +9,8 @@ const http    = require('http');
 const cors    = require('cors');
 const helmet  = require('helmet');
 const morgan  = require('morgan');
+const path    = require('path');
+const compression = require('compression');
 
 const connectDB             = require('./config/db');
 const { globalLimiter }     = require('./middleware/rateLimiter');
@@ -34,14 +36,46 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
+const dns = require("dns");
+
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
+// ── 0. Gzip Compression (must be FIRST — before any routes or static) ─────────
+app.use(compression({
+  level: 6,                    // compression level (1=fast, 9=best)
+  threshold: 1024,             // compress responses > 1KB only
+  filter: (req, res) => {
+    // Don't compress already-compressed Stripe webhook raw body
+    if (req.path === '/api/payment/webhook') return false;
+    return compression.filter(req, res);
+  },
+}));
 
 // ── 1. Security & CORS ───────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow Cloudinary images
 }));
 
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+// In development, also permit any localhost origin for convenience
+const isDev = process.env.NODE_ENV !== 'production';
+
 app.use(cors({
-  origin:      process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // Only allow bare localhost fallthrough in development
+    if (isDev && (origin.includes('localhost:') || origin.includes('127.0.0.1:'))) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'), false);
+  },
   credentials: true,
   methods:     ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -62,6 +96,9 @@ app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 // Global JSON parser for all other routes
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // ── 4. Global Rate Limiter ────────────────────────────────────────────────────
 app.use(globalLimiter);
@@ -144,11 +181,18 @@ const startServer = async () => {
 
   const activePort = await listenOnAvailablePort(PORT);
 
+  const maskedClientId = process.env.GOOGLE_CLIENT_ID
+    ? (process.env.GOOGLE_CLIENT_ID.startsWith('dummy')
+      ? '⚠️ dummy_google_id'
+      : `${process.env.GOOGLE_CLIENT_ID.substring(0, 12)}...${process.env.GOOGLE_CLIENT_ID.slice(-8)}`)
+    : '❌ Not Configured';
+
   console.log('');
   console.log('╔════════════════════════════════════════════════╗');
   console.log(`║  🎓 MerchStore API Server                      ║`);
   console.log(`║  🚀 Running on http://localhost:${activePort}           ║`);
   console.log(`║  🌍 Environment: ${(process.env.NODE_ENV || 'development').padEnd(29)}║`);
+  console.log(`║  🔑 Google Client ID: ${maskedClientId.padEnd(25)}║`);
   console.log(`║  🔌 WebSocket: Active (Socket.io)              ║`);
   console.log('╚════════════════════════════════════════════════╝');
   console.log('');

@@ -21,8 +21,8 @@ const loginSchema = z.object({
   email: z.string()
     .min(1, 'Email is required')
     .email('Please enter a valid email address')
-    .refine(isGUEmail, { message: 'Only Geeta University emails are allowed' }),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+    .refine(isGUEmail, { message: 'Only Geeta University emails (@geetauniversity.edu.in) are allowed' }),
+  password: z.string().min(1, 'Password is required'),
 });
 
 const Login = () => {
@@ -30,7 +30,7 @@ const Login = () => {
   const navigate  = useNavigate();
   const location  = useLocation();
   const [searchParams] = useSearchParams();
-  const { loading, error, token } = useSelector((s) => s.auth);
+  const { loading, error, token, user } = useSelector((s) => s.auth);
   const from = getLoginRedirectPath(location);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -51,20 +51,31 @@ const Login = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (token) {
-      navigate(from, { replace: true });
+    if (token && user) {
+      if (user.role === 'admin') {
+        navigate('/admin/analytics', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     }
     return () => { dispatch(clearAuthError()); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token, user]);
 
   const onSubmit = async (data) => {
     try {
-      await dispatch(loginUser(data)).unwrap();
+      const loginRes = await dispatch(loginUser(data)).unwrap();
+      const user = loginRes?.data?.user || loginRes?.user;
+      
       await dispatch(fetchCurrentUser()).unwrap();
       await completePendingCartAction(dispatch);
-      toast.success('Welcome back to GU MerchStore!');
-      navigate(consumeAuthRedirectPath(from), { replace: true });
+      if (user?.role === 'admin') {
+        navigate('/admin/analytics', { replace: true });
+        toast.success('Welcome back, Administrator!');
+      } else {
+        navigate(consumeAuthRedirectPath(from), { replace: true });
+        toast.success('Welcome back to GU MerchStore!');
+      }
     } catch (err) {
       toast.error(err || 'Failed to authenticate');
     }
@@ -184,7 +195,7 @@ const Login = () => {
                   type="email"
                   id="login-email"
                   className="w-full pl-11 pr-12 py-3.5 bg-transparent text-white placeholder-white/20 text-sm font-medium rounded-xl outline-none"
-                  placeholder="you@geeta.ac.in"
+                  placeholder="you@geetauniversity.edu.in"
                   autoComplete="email"
                   {...register('email')}
                   onFocus={() => setEmailFocused(true)}
@@ -282,7 +293,7 @@ const Login = () => {
 
           {/* Domain chips */}
           <div className="mt-4 flex flex-wrap gap-2 justify-center">
-            {['@geeta.ac.in', '@geetauniversity.ac.in', '@geetauniversity.edu.in'].map((d) => (
+            {['@geetauniversity.edu.in'].map((d) => (
               <span key={d} className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-white/5 border border-white/10 text-white/40">
                 {d}
               </span>

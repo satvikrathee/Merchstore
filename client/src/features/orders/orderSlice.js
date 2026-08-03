@@ -61,6 +61,18 @@ export const fetchOrderById = createAsyncThunk(
   }
 );
 
+export const cancelOrder = createAsyncThunk(
+  'orders/cancel',
+  async ({ orderId, reason }, { rejectWithValue }) => {
+    try {
+      const response = await api.put(`/orders/${orderId}/cancel`, { reason });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to cancel order');
+    }
+  }
+);
+
 const initialState = {
   list: [],
   currentOrder: null,
@@ -83,7 +95,19 @@ const orderSlice = createSlice({
     clearCoupon: (state) => {
       state.activeCoupon = null;
       state.couponError = null;
-    }
+    },
+    updateOrderStatusInList: (state, action) => {
+      const { orderId, status, paymentStatus } = action.payload;
+      const order = state.list.find((o) => o._id === orderId);
+      if (order) {
+        if (status) order.status = status;
+        if (paymentStatus) order.paymentStatus = paymentStatus;
+      }
+      if (state.currentOrder?._id === orderId) {
+        if (status) state.currentOrder.status = status;
+        if (paymentStatus) state.currentOrder.paymentStatus = paymentStatus;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -145,9 +169,21 @@ const orderSlice = createSlice({
       .addCase(fetchOrderById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+
+      // Cancel Order
+      .addCase(cancelOrder.fulfilled, (state, action) => {
+        const updatedOrder = action.payload?.order || action.payload?.data;
+        if (updatedOrder?._id) {
+          const item = state.list.find((o) => o._id === updatedOrder._id);
+          if (item) item.status = 'cancelled';
+          if (state.currentOrder?._id === updatedOrder._id) {
+            state.currentOrder.status = 'cancelled';
+          }
+        }
       });
   }
 });
 
-export const { clearOrderState, clearCoupon } = orderSlice.actions;
+export const { clearOrderState, clearCoupon, updateOrderStatusInList } = orderSlice.actions;
 export default orderSlice.reducer;
