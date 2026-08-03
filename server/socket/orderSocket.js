@@ -140,6 +140,28 @@ const emitPaymentFailed = (orderId, reason = '') => {
 };
 
 /**
+ * Emit ORDER_CREATED to the admin room
+ * @param {Object} order
+ */
+const emitOrderCreated = (order) => {
+  if (!io) {
+    console.warn('⚠️ Socket.io not initialized — cannot emit ORDER_CREATED');
+    return;
+  }
+
+  const payload = {
+    orderId: order._id.toString(),
+    status: order.status,
+    finalAmount: order.finalAmount,
+    customerName: order.address?.fullName || 'Customer',
+    timestamp: new Date().toISOString(),
+  };
+
+  io.to('admin:orders').emit('ORDER_CREATED', payload);
+  console.log(`📡 Emitted ORDER_CREATED → room admin:orders`, payload);
+};
+
+/**
  * Get the initialized io instance (for custom emissions)
  */
 const getIO = () => {
@@ -151,7 +173,11 @@ module.exports = {
   initSocket,
   getIO,
   emitOrderStatusUpdate,
+  emitOrderCreated,
   emitPaymentConfirmed,
   emitPaymentFailed,
-  EVENTS,
+  EVENTS: {
+    ...EVENTS,
+    ORDER_CREATED: 'ORDER_CREATED',
+  },
 };

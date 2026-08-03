@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, Navigate } from 'react-router-dom';
-import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut, Download } from 'lucide-react';
+import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut, Download, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchUserOrders, updateOrderStatusInList } from '../features/orders/orderSlice';
 import { addAddress, logout } from '../features/auth/authSlice';
@@ -252,20 +252,28 @@ const UserDashboard = () => {
                         
                         <Link 
                           to={`/order-confirm/${ord._id}`}
-                          className="p-2.5 bg-brand-maroon-50 text-brand-maroon-700 hover:bg-brand-maroon-700 hover:text-white rounded-xl transition-all duration-200 border border-brand-maroon-100"
+                          className="p-2.5 bg-brand-maroon-50 text-brand-maroon-700 hover:bg-brand-maroon-700 hover:text-white rounded-xl transition-all duration-200 border border-brand-maroon-100 flex items-center gap-1.5 font-sans text-xs font-semibold"
                           title="Track Live Order Status"
                         >
                           <Eye className="w-4 h-4" />
+                          <span className="hidden md:inline">Track</span>
                         </Link>
-                        {ord.status?.toLowerCase() === 'delivered' && ord.paymentStatus?.toLowerCase() === 'paid' && (
-                          <button 
-                            onClick={() => downloadReceipt(ord)}
-                            className="p-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:text-white rounded-xl transition-all duration-200 border border-emerald-100"
-                            title="Download Receipt"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        )}
+                        <Link 
+                          to={`/order/${ord._id}/receipt`}
+                          className="p-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-700 hover:text-white rounded-xl transition-all duration-200 border border-indigo-100 flex items-center gap-1.5 font-sans text-xs font-semibold"
+                          title="View Official Receipt"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span className="hidden md:inline">Receipt</span>
+                        </Link>
+                        <button 
+                          onClick={() => downloadReceipt(ord)}
+                          className="p-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:text-white rounded-xl transition-all duration-200 border border-emerald-100 flex items-center gap-1.5 font-sans text-xs font-semibold"
+                          title="Download PDF/Print Receipt"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span className="hidden md:inline">Download</span>
+                        </button>
                       </div>
                     </div>
                   ))}

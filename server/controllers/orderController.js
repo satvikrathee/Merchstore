@@ -10,8 +10,9 @@ const { asyncHandler }       = require('../middleware/errorHandler');
 const { clearCartByUserId }  = require('./cartController');
 const { createPaymentIntent } = require('../services/stripeService');
 const { checkStockAvailability, decrementStock } = require('../services/inventoryService');
-const { emitOrderStatusUpdate } = require('../socket/orderSocket');
+const { emitOrderStatusUpdate, emitOrderCreated } = require('../socket/orderSocket');
 const { sendEmail, buildOrderReceiptHTML } = require('../services/emailService');
+const { sendOrderSMS } = require('../services/smsService');
 
 // ── Fire-and-forget receipt email (never throws to caller) ─────────────────────
 const sendReceiptEmail = (order, user) => {
@@ -24,6 +25,43 @@ const sendReceiptEmail = (order, user) => {
     ).catch(err => console.error('📧 Receipt email failed:', err.message));
   } catch (err) {
     console.error('📧 Receipt email build failed:', err.message);
+  }
+};
+
+// ── Fire-and-forget admin notification email ───────────────────────────────────
+const sendAdminNotificationEmail = (order, user) => {
+  try {
+    const adminEmail = process.env.ALERT_EMAIL || 'admin@geetauniversity.ac.in';
+    const shortId = order._id.toString().slice(-10).toUpperCase();
+    const itemsList = order.items.map(item => `<li>${item.name} (${item.size}) x ${item.qty} - ₹${item.price}</li>`).join('');
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; max-width: 600px;">
+        <h2 style="color: #6b1414; margin: 0 0 10px;">🔔 New Order Placed</h2>
+        <p>A new order has been received on the Geeta University MerchStore.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 15px 0;">
+        <p><strong>Order ID:</strong> #${shortId} (${order._id})</p>
+        <p><strong>Customer:</strong> ${user.name} (${user.email})</p>
+        <p><strong>Total Amount:</strong> ₹${order.finalAmount}</p>
+        <p><strong>Payment Method:</strong> ${order.paymentMethod.toUpperCase()}</p>
+        <p><strong>Shipping Address:</strong> ${order.address?.street || 'N/A'}, ${order.address?.city || 'N/A'}, ${order.address?.state || 'N/A'} - ${order.address?.pincode || 'N/A'}</p>
+        <h3 style="color: #334155; margin-top: 20px;">Items:</h3>
+        <ul>${itemsList}</ul>
+        <br>
+        <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/orders" 
+           style="background-color: #6b1414; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+          Go to Admin Dashboard
+        </a>
+      </div>
+    `;
+    
+    sendEmail(
+      adminEmail,
+      `🔔 New Order Received — #${shortId} | ₹${order.finalAmount}`,
+      html
+    ).catch(err => console.error('📧 Admin notification email failed:', err.message));
+  } catch (err) {
+    console.error('📧 Admin notification email build failed:', err.message);
   }
 };
 
@@ -270,6 +308,19 @@ const createOrder = asyncHandler(async (req, res) => {
     try {
       emailUser = await User.findById(userId).select('name email').lean();
     } catch (_) { /* non-critical */ }
+
+    if (savedOrder) {
+      // Send real-time socket notification to admin
+      emitOrderCreated(savedOrder);
+      
+      // Send email notification to admin
+      if (emailUser) {
+        sendAdminNotificationEmail(savedOrder, emailUser);
+      }
+
+      // Send SMS notification to customer phone
+      sendOrderSMS(savedOrder, resolvedAddress).catch(err => console.error('📱 SMS trigger error:', err.message));
+    }
 
     if (paymentMethod === 'stripe' && savedOrder) {
       if (emailUser) sendReceiptEmail(savedOrder, emailUser);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download } from 'lucide-react';
+import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download, FileText } from 'lucide-react';
 import { fetchOrderById } from '../features/orders/orderSlice';
 import { useSocket } from '../hooks/useSocket';
 import Loader from '../components/Loader';
@@ -94,8 +94,7 @@ const OrderConfirm = () => {
   }
 
   const currentStatus = (localStatus || order.status || '').toLowerCase();
-  const currentPaymentStatus = (localPaymentStatus || order.paymentStatus || '').toLowerCase();
-  const showReceiptButton = currentStatus === 'delivered' && currentPaymentStatus === 'paid';
+  const showReceiptButton = currentStatus !== 'cancelled';
 
   const subtotalVal = order.subtotal ?? order.totalAmount ?? 0;
   const discountVal = order.discount ?? order.discountAmount ?? 0;
@@ -345,13 +344,22 @@ const OrderConfirm = () => {
 
           <div className="space-y-3 pt-2">
             {showReceiptButton && (
-              <button 
-                onClick={() => downloadReceipt(order)}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-[#7A1C1C] text-white hover:bg-[#611414] rounded-xl text-sm font-semibold shadow-sm transition-all"
-              >
-                <Download className="w-4 h-4" />
-                Download Receipt
-              </button>
+              <>
+                <Link
+                  to={`/order/${order._id}/receipt`}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-[#7A1C1C] text-white hover:bg-[#611414] rounded-xl text-sm font-semibold shadow-sm transition-all"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Official Receipt
+                </Link>
+                <button 
+                  onClick={() => downloadReceipt(order)}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-700 text-white hover:bg-emerald-800 rounded-xl text-sm font-semibold shadow-sm transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF / Print Receipt
+                </button>
+              </>
             )}
             <Link to="/dashboard" className="w-full btn-secondary py-3 text-sm font-semibold text-center block">
               View Order History
