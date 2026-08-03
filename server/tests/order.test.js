@@ -17,6 +17,7 @@ const {
   getUserOrders,
   getSingleOrder,
   updateOrderStatus,
+  cancelOrder,
 } = require('../controllers/orderController');
 
 const Cart      = require('../models/Cart');
@@ -81,6 +82,7 @@ describe('OrderController', () => {
 
     inventoryService.checkStockAvailability.mockResolvedValue({ ok: true, insufficient: [] });
     inventoryService.decrementStock.mockResolvedValue({ modifiedCount: 1 });
+    inventoryService.restoreStock.mockResolvedValue({});
 
     // Fresh session mock each test
     mockSession.withTransaction.mockImplementation(async (fn) => { await fn(); });
@@ -466,6 +468,121 @@ describe('OrderController', () => {
       await updateOrderStatus(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('restores stock when admin updates order status to cancelled', async () => {
+      const orderOid = new mongoose.Types.ObjectId();
+      const mockOrder = {
+        _id:    orderOid,
+        status: 'placed',
+        userId: { _id: USER_OID, name: 'Test User', email: 'test@test.com' },
+        statusHistory: [],
+        items: [{ productId: PROD_OID, qty: 1, size: 'M' }],
+        save:   jest.fn().mockResolvedValue(true),
+      };
+
+      Order.findById = jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue(mockOrder),
+      });
+
+      const req = {
+        user:   mockAdmin,
+        params: { id: orderOid.toString() },
+        body:   { status: 'cancelled', note: 'Cancelled by Admin' },
+      };
+      const res = mockRes();
+
+      await updateOrderStatus(req, res);
+
+      expect(mockOrder.status).toBe('cancelled');
+      expect(inventoryService.restoreStock).toHaveBeenCalledWith(mockOrder.items);
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+  });
+
+  // ── cancelOrder ────────────────────────────────────────────────────────────
+  describe('PUT /api/orders/:id/cancel', () => {
+
+    it('cancels order successfully, restores stock, and emits event', async () => {
+      const orderOid = new mongoose.Types.ObjectId();
+      const mockOrder = {
+        _id:    orderOid,
+        status: 'placed',
+        userId: { _id: USER_OID, name: 'Test User', email: 'test@test.com' },
+        statusHistory: [],
+        items: [{ productId: PROD_OID, qty: 2, size: 'M' }],
+        save:   jest.fn().mockResolvedValue(true),
+      };
+
+      Order.findById = jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue(mockOrder),
+      });
+
+      const req = {
+        user:   mockUser,
+        params: { id: orderOid.toString() },
+      };
+      const res = mockRes();
+
+      await cancelOrder(req, res);
+
+      expect(mockOrder.status).toBe('cancelled');
+      expect(inventoryService.restoreStock).toHaveBeenCalledWith(mockOrder.items);
+      expect(emitOrderStatusUpdate).toHaveBeenCalledWith(
+        orderOid.toString(),
+        'cancelled',
+        expect.objectContaining({ note: 'Order cancelled by customer' })
+      );
+      expect(mockOrder.save).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('blocks cancelling order by other users', async () => {
+      const orderOid = new mongoose.Types.ObjectId();
+      const otherUserOid = new mongoose.Types.ObjectId();
+      const mockOrder = {
+        _id:    orderOid,
+        status: 'placed',
+        userId: { _id: otherUserOid, name: 'Other User' },
+      };
+
+      Order.findById = jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue(mockOrder),
+      });
+
+      const req = {
+        user:   mockUser,
+        params: { id: orderOid.toString() },
+      };
+      const res = mockRes();
+
+      await cancelOrder(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    it('blocks cancelling when order status is not placed', async () => {
+      const orderOid = new mongoose.Types.ObjectId();
+      const mockOrder = {
+        _id:    orderOid,
+        status: 'shipped',
+        userId: { _id: USER_OID, name: 'Test User' },
+      };
+
+      Order.findById = jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue(mockOrder),
+      });
+
+      const req = {
+        user:   mockUser,
+        params: { id: orderOid.toString() },
+      };
+      const res = mockRes();
+
+      await cancelOrder(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].message).toMatch(/cannot cancel/i);
     });
   });
 });

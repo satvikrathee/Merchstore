@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+
 import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download, FileText, XCircle } from 'lucide-react';
 import { fetchOrderById } from '../features/orders/orderSlice';
 import { cancelOrder } from '../features/orders/orderSlice';
+
+import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download } from 'lucide-react';
+import { fetchOrderById, cancelUserOrder } from '../features/orders/orderSlice';
+
 import { useSocket } from '../hooks/useSocket';
 import Loader from '../components/Loader';
 import api from '../utils/api';
@@ -26,6 +31,21 @@ const OrderConfirm = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Cancel order handler
+  const handleCancelOrder = (orderId) => {
+    if (window.confirm('Are you sure you want to cancel this order?')) {
+      dispatch(cancelUserOrder(orderId))
+        .unwrap()
+        .then((res) => {
+          toast.success(res.message || 'Order cancelled successfully');
+          setLocalStatus('cancelled');
+        })
+        .catch((err) => {
+          toast.error(err || 'Failed to cancel order');
+        });
+    }
+  };
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
@@ -128,18 +148,32 @@ const OrderConfirm = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12 min-h-screen text-left">
-      {/* Success Hero Header */}
-      <div className="text-center space-y-4 mb-12">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-50 border-4 border-green-100 text-green-600 mb-2 animate-bounce">
-          <Check className="w-10 h-10 stroke-[3]" />
+      {/* Dynamic Hero Header */}
+      {currentStatus === 'cancelled' ? (
+        <div className="text-center space-y-4 mb-12 animate-fadeIn">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-rose-50 border-4 border-rose-100 text-rose-600 mb-2">
+            <X className="w-10 h-10 stroke-[3]" />
+          </div>
+          <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand-dark-900 tracking-tight">
+            Order Cancelled
+          </h1>
+          <p className="font-sans text-sm text-brand-dark-500 max-w-md mx-auto leading-relaxed">
+            Order <strong className="text-brand-dark-900 font-bold">{order._id}</strong> has been cancelled.
+          </p>
         </div>
-        <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand-dark-900 tracking-tight">
-          Thank You For Your Order!
-        </h1>
-        <p className="font-sans text-sm text-brand-dark-500 max-w-md mx-auto leading-relaxed">
-          Order <strong className="text-brand-dark-900 font-bold">{order._id}</strong> has been confirmed. You will receive a notification when it is ready for collection.
-        </p>
-      </div>
+      ) : (
+        <div className="text-center space-y-4 mb-12">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-50 border-4 border-green-100 text-green-600 mb-2 animate-bounce">
+            <Check className="w-10 h-10 stroke-[3]" />
+          </div>
+          <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand-dark-900 tracking-tight">
+            Thank You For Your Order!
+          </h1>
+          <p className="font-sans text-sm text-brand-dark-500 max-w-md mx-auto leading-relaxed">
+            Order <strong className="text-brand-dark-900 font-bold">{order._id}</strong> has been confirmed. You will receive a notification when it is ready for collection.
+          </p>
+        </div>
+      )}
 
       {/* TRACKER PROGRESS BLOCK */}
       <div className="bg-white border border-brand-dark-100 rounded-3xl p-6 sm:p-8 shadow-premium mb-10 space-y-8">
@@ -153,47 +187,61 @@ const OrderConfirm = () => {
         </div>
 
         {/* Visual Line Tracker */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {steps.map((stepItem, idx) => {
-            const status = getStepStatus(stepItem.title);
-            const Icon = stepItem.icon;
+        {currentStatus === 'cancelled' ? (
+          <div className="p-6 border border-rose-250 bg-rose-50/10 rounded-2xl flex flex-col items-center justify-center gap-3 text-center animate-fadeIn">
+            <div className="p-3.5 bg-rose-100 text-rose-700 rounded-xl">
+              <X className="w-6 h-6 stroke-[3]" />
+            </div>
+            <div>
+              <h4 className="font-display font-bold text-sm text-brand-dark-900">This order has been cancelled</h4>
+              <p className="font-sans text-[11px] text-brand-dark-500 mt-1 max-w-md leading-relaxed">
+                Stock has been returned to the inventory. If payment was processed, a refund will be initiated under refund policies.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {steps.map((stepItem, idx) => {
+              const status = getStepStatus(stepItem.title);
+              const Icon = stepItem.icon;
 
-            return (
-              <div 
-                key={idx}
-                className={`p-4 border rounded-2xl flex flex-col gap-3 relative transition-all duration-300 ${
-                  status === 'active' 
-                    ? 'border-brand-maroon-700 bg-brand-maroon-50/10 ring-2 ring-brand-maroon-600/20' 
-                    : status === 'completed'
-                      ? 'border-brand-dark-200 bg-brand-dark-50/50 opacity-80'
-                      : 'border-brand-dark-150 opacity-40'
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <div className={`p-2 rounded-xl ${
+              return (
+                <div 
+                  key={idx}
+                  className={`p-4 border rounded-2xl flex flex-col gap-3 relative transition-all duration-300 ${
                     status === 'active' 
-                      ? 'bg-brand-maroon-700 text-white' 
+                      ? 'border-brand-maroon-700 bg-brand-maroon-50/10 ring-2 ring-brand-maroon-600/20' 
                       : status === 'completed'
-                        ? 'bg-green-700 text-white'
-                        : 'bg-brand-dark-100 text-brand-dark-500'
-                  }`}>
-                    <Icon className="w-5 h-5" />
+                        ? 'border-brand-dark-200 bg-brand-dark-50/50 opacity-80'
+                        : 'border-brand-dark-150 opacity-40'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div className={`p-2 rounded-xl ${
+                      status === 'active' 
+                        ? 'bg-brand-maroon-700 text-white' 
+                        : status === 'completed'
+                          ? 'bg-green-700 text-white'
+                          : 'bg-brand-dark-100 text-brand-dark-500'
+                    }`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    {status === 'completed' && (
+                      <span className="w-5 h-5 rounded-full bg-green-150 text-green-800 flex items-center justify-center text-xs">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </span>
+                    )}
                   </div>
-                  {status === 'completed' && (
-                    <span className="w-5 h-5 rounded-full bg-green-150 text-green-800 flex items-center justify-center text-xs">
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    </span>
-                  )}
-                </div>
 
-                <div className="text-left space-y-1">
-                  <h4 className="font-display font-bold text-sm text-brand-dark-900">{stepItem.title}</h4>
-                  <p className="font-sans text-[11px] text-brand-dark-500 leading-snug">{stepItem.desc}</p>
+                  <div className="text-left space-y-1">
+                    <h4 className="font-display font-bold text-sm text-brand-dark-900">{stepItem.title}</h4>
+                    <p className="font-sans text-[11px] text-brand-dark-500 leading-snug">{stepItem.desc}</p>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* DETAILED SUMMARY */}
@@ -357,6 +405,7 @@ const OrderConfirm = () => {
                 Cancel This Order
               </button>
             )}
+
             {showReceiptButton && (
               <>
                 <Link
@@ -375,6 +424,17 @@ const OrderConfirm = () => {
                 </button>
               </>
             )}
+
+
+            {currentStatus === 'placed' && (
+              <button
+                onClick={() => handleCancelOrder(order._id)}
+                className="w-full py-3 bg-rose-50 text-rose-700 hover:bg-rose-700 hover:text-white rounded-xl text-sm font-semibold border border-rose-100 transition-all text-center block"
+              >
+                Cancel Order
+              </button>
+            )}
+
             <Link to="/dashboard" className="w-full btn-secondary py-3 text-sm font-semibold text-center block">
               View Order History
             </Link>

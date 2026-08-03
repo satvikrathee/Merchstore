@@ -61,11 +61,19 @@ export const fetchOrderById = createAsyncThunk(
   }
 );
 
+
 export const cancelOrder = createAsyncThunk(
   'orders/cancel',
   async ({ orderId, reason }, { rejectWithValue }) => {
     try {
       const response = await api.put(`/orders/${orderId}/cancel`, { reason });
+
+export const cancelUserOrder = createAsyncThunk(
+  'orders/cancel',
+  async (orderId, { rejectWithValue }) => {
+    try {
+      const response = await api.put(`/orders/${orderId}/cancel`);
+
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to cancel order');
@@ -171,6 +179,7 @@ const orderSlice = createSlice({
         state.error = action.payload;
       })
 
+
       // Cancel Order
       .addCase(cancelOrder.fulfilled, (state, action) => {
         const updatedOrder = action.payload?.order || action.payload?.data;
@@ -181,6 +190,39 @@ const orderSlice = createSlice({
             state.currentOrder.status = 'cancelled';
           }
         }
+
+      
+      // Cancel Order
+      .addCase(cancelUserOrder.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(cancelUserOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        const updatedOrder = action.payload?.data;
+        if (updatedOrder) {
+          // Update status in list
+          const index = state.list.findIndex(
+            (o) => String(o._id) === String(updatedOrder.orderId)
+          );
+          if (index !== -1) {
+            state.list[index].status = updatedOrder.status;
+            if (updatedOrder.history) {
+              state.list[index].statusHistory = updatedOrder.history;
+            }
+          }
+          // Update status in currentOrder
+          if (state.currentOrder && String(state.currentOrder._id) === String(updatedOrder.orderId)) {
+            state.currentOrder.status = updatedOrder.status;
+            if (updatedOrder.history) {
+              state.currentOrder.statusHistory = updatedOrder.history;
+            }
+          }
+        }
+      })
+      .addCase(cancelUserOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+
       });
   }
 });
