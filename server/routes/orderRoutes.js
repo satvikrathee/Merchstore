@@ -13,6 +13,7 @@ const {
   adminGetOrders,
   updateOrderStatus,
   updateOrderPaymentStatus,
+  cancelUserOrder,
 } = require('../controllers/orderController');
 const {
   createOrderSchema,
@@ -24,6 +25,7 @@ const {
 // ── User routes ───────────────────────────────────────────────────────────────
 // IMPORTANT: /single/:orderId must come BEFORE /:userId to avoid route collision
 router.get('/single/:orderId', protect, getSingleOrder);
+router.put('/:id/cancel', protect, cancelUserOrder);
 
 router.post(
   '/create',

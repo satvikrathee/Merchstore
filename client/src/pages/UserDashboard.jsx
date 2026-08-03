@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, Navigate } from 'react-router-dom';
-import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut, Download, FileText } from 'lucide-react';
+import { User, ShoppingBag, MapPin, Eye, Plus, Trash, Shield, LogOut, Download, FileText, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fetchUserOrders, updateOrderStatusInList } from '../features/orders/orderSlice';
+import { fetchUserOrders, updateOrderStatusInList, cancelOrder } from '../features/orders/orderSlice';
 import { addAddress, logout } from '../features/auth/authSlice';
 import { useUserOrdersSocket } from '../hooks/useUserOrdersSocket';
 import Loader from '../components/Loader';
@@ -20,6 +20,9 @@ const UserDashboard = () => {
   const [stateName, setStateName] = useState('');
   const [pincode, setPincode] = useState('');
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [cancelOrderId, setCancelOrderId] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     dispatch(fetchUserOrders());
@@ -53,6 +56,22 @@ const UserDashboard = () => {
   if (user?.role === 'admin') {
     return <Navigate to="/admin/analytics" replace />;
   }
+
+  const handleCancelOrder = async () => {
+    if (!cancelOrderId) return;
+    setIsCancelling(true);
+    try {
+      await dispatch(cancelOrder({ orderId: cancelOrderId, reason: cancelReason })).unwrap();
+      toast.success('Order cancelled successfully. Your stock has been restored.', { icon: '✅', duration: 4000 });
+      dispatch(fetchUserOrders());
+    } catch (err) {
+      toast.error(err || 'Failed to cancel order');
+    } finally {
+      setIsCancelling(false);
+      setCancelOrderId(null);
+      setCancelReason('');
+    }
+  };
 
   const handleAddAddress = (e) => {
     e.preventDefault();
@@ -274,6 +293,16 @@ const UserDashboard = () => {
                           <Download className="w-4 h-4" />
                           <span className="hidden md:inline">Download</span>
                         </button>
+                        {['placed', 'packed'].includes(ord.status?.toLowerCase()) && (
+                          <button
+                            onClick={() => { setCancelOrderId(ord._id); setCancelReason(''); }}
+                            className="p-2.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl transition-all duration-200 border border-red-100 flex items-center gap-1.5 font-sans text-xs font-semibold"
+                            title="Cancel Order"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            <span className="hidden md:inline">Cancel</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -436,6 +465,64 @@ const UserDashboard = () => {
           )}
         </main>
       </div>
+
+      {/* ── Cancel Order Confirmation Modal ─────────────────────────────── */}
+      {cancelOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark-950/40 backdrop-blur-md animate-fadeIn">
+          <div 
+            className="absolute inset-0"
+            onClick={() => { setCancelOrderId(null); setCancelReason(''); }}
+          />
+          <div className="relative bg-white border border-brand-dark-100 rounded-3xl p-6 sm:p-8 shadow-xl w-full max-w-md z-10">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-50 rounded-xl">
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-lg text-brand-dark-900">Cancel Order?</h3>
+                <p className="font-sans text-xs text-brand-dark-500">This action cannot be undone</p>
+              </div>
+            </div>
+
+            <p className="font-sans text-sm text-brand-dark-600 mb-4">
+              Are you sure you want to cancel this order? Your items will be restocked and no charge will be made.
+            </p>
+
+            <div className="mb-5">
+              <label className="font-sans text-xs font-bold uppercase tracking-wider text-brand-dark-500 block mb-1.5">
+                Reason for Cancellation <span className="text-brand-dark-400 font-normal normal-case">(optional)</span>
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Ordered by mistake, found a better deal..."
+                rows={3}
+                className="w-full border border-brand-dark-200 rounded-xl px-4 py-2.5 font-sans text-sm text-brand-dark-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setCancelOrderId(null); setCancelReason(''); }}
+                className="flex-1 py-3 border border-brand-dark-200 text-brand-dark-700 hover:bg-brand-dark-50 rounded-xl font-sans text-sm font-semibold transition-all"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={handleCancelOrder}
+                disabled={isCancelling}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-sans text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isCancelling ? (
+                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Cancelling...</>
+                ) : (
+                  <><XCircle className="w-4 h-4" />Yes, Cancel Order</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

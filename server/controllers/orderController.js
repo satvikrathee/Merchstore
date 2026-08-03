@@ -9,7 +9,7 @@ const Coupon   = require('../models/Coupon');
 const { asyncHandler }       = require('../middleware/errorHandler');
 const { clearCartByUserId }  = require('./cartController');
 const { createPaymentIntent } = require('../services/stripeService');
-const { checkStockAvailability, decrementStock } = require('../services/inventoryService');
+const { checkStockAvailability, decrementStock, restoreStock } = require('../services/inventoryService');
 const { emitOrderStatusUpdate, emitOrderCreated } = require('../socket/orderSocket');
 const { sendEmail, buildOrderReceiptHTML } = require('../services/emailService');
 const { sendOrderSMS } = require('../services/smsService');
@@ -595,6 +595,62 @@ const updateOrderPaymentStatus = asyncHandler(async (req, res) => {
   });
 });
 
+// ─── PUT /api/orders/:id/cancel ────────────────────────────────────────────────
+const cancelUserOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user._id;
+
+  const order = await Order.findById(id);
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  // Ensure order belongs to logged-in user (or admin)
+  if (order.userId.toString() !== userId.toString() && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Not authorized to cancel this order' });
+  }
+
+  // Check if order can be cancelled
+  if (['shipped', 'delivered', 'cancelled', 'returned'].includes(order.status)) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot cancel order with status '${order.status}'. Only placed or packed orders can be cancelled.`,
+    });
+  }
+
+  const previousStatus = order.status;
+  order.status = 'cancelled';
+  order.statusHistory.push({
+    status: 'cancelled',
+    timestamp: new Date(),
+    note: req.body?.reason ? `Cancelled by User: ${req.body.reason}` : 'Cancelled by User',
+    updatedBy: req.user._id,
+  });
+
+  await order.save();
+
+  // Restore inventory stock
+  try {
+    await restoreStock(order.items);
+  } catch (err) {
+    console.error('⚠️ Failed to restore stock on order cancellation:', err.message);
+  }
+
+  // Emit WebSocket event to update UI in real time
+  emitOrderStatusUpdate(order._id.toString(), 'cancelled', {
+    note: 'Cancelled by User',
+    updatedBy: req.user.name || 'Customer',
+    previousStatus,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Order cancelled successfully and stock restored',
+    order,
+  });
+});
+
 module.exports = {
   createOrder,
   getUserOrders,
@@ -602,4 +658,5 @@ module.exports = {
   adminGetOrders,
   updateOrderStatus,
   updateOrderPaymentStatus,
+  cancelUserOrder,
 };
