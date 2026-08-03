@@ -5,6 +5,7 @@ jest.mock('../models/Cart');
 jest.mock('../models/Order');
 jest.mock('../models/Coupon');
 jest.mock('../models/Product');
+jest.mock('../models/User');
 jest.mock('../services/stripeService');
 jest.mock('../services/inventoryService');
 jest.mock('../socket/orderSocket');
@@ -23,6 +24,7 @@ const {
 const Cart      = require('../models/Cart');
 const Order     = require('../models/Order');
 const Coupon    = require('../models/Coupon');
+const User      = require('../models/User');
 const mongoose  = require('mongoose');
 const stripeService    = require('../services/stripeService');
 const inventoryService = require('../services/inventoryService');
@@ -88,6 +90,26 @@ describe('OrderController', () => {
     mockSession.withTransaction.mockImplementation(async (fn) => { await fn(); });
     mockSession.endSession.mockReset();
     jest.spyOn(mongoose, 'startSession').mockResolvedValue(mockSession);
+
+    const mockUserInstance = {
+      _id: USER_OID,
+      name: 'Test User',
+      email: 'test@test.com',
+      isRestricted: false,
+      fakeOrderCount: 0,
+      save: jest.fn().mockResolvedValue(true),
+    };
+    const mockSelectChain = {
+      lean: jest.fn().mockResolvedValue(mockUserInstance),
+      then: jest.fn(cb => Promise.resolve(mockUserInstance).then(cb)),
+      catch: jest.fn(),
+      ...mockUserInstance
+    };
+    User.findById = jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue(mockSelectChain),
+      save: jest.fn().mockResolvedValue(true),
+      ...mockUserInstance
+    });
   });
 
   // ── createOrder ────────────────────────────────────────────────────────────

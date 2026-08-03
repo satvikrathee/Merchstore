@@ -3,10 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download, FileText, XCircle } from 'lucide-react';
-import { fetchOrderById } from '../features/orders/orderSlice';
-import { cancelOrder } from '../features/orders/orderSlice';
-
-import { CheckCircle, Package, Truck, Compass, Check, ArrowRight, ShoppingBag, Star, X, Download } from 'lucide-react';
 import { fetchOrderById, cancelUserOrder } from '../features/orders/orderSlice';
 
 import { useSocket } from '../hooks/useSocket';

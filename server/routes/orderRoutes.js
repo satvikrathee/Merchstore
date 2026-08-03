@@ -13,11 +13,8 @@ const {
   adminGetOrders,
   updateOrderStatus,
   updateOrderPaymentStatus,
-
   cancelUserOrder,
-
   cancelOrder,
-
 } = require('../controllers/orderController');
 const {
   createOrderSchema,
@@ -55,7 +52,6 @@ router.post(
 );
 
 router.get('/:userId', protect, getUserOrders);
-router.put('/:id/cancel', protect, cancelOrder);
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
 router.get(

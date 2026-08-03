@@ -6,8 +6,6 @@ import toast from 'react-hot-toast';
 
 import { fetchUserOrders, updateOrderStatusInList, cancelOrder } from '../features/orders/orderSlice';
 
-import { fetchUserOrders, updateOrderStatusInList, cancelUserOrder } from '../features/orders/orderSlice';
-
 import { addAddress, logout } from '../features/auth/authSlice';
 import { useUserOrdersSocket } from '../hooks/useUserOrdersSocket';
 import Loader from '../components/Loader';
@@ -32,18 +30,7 @@ const UserDashboard = () => {
     dispatch(fetchUserOrders());
   }, [dispatch]);
 
-  const handleCancelOrder = (orderId) => {
-    if (window.confirm('Are you sure you want to cancel this order?')) {
-      dispatch(cancelUserOrder(orderId))
-        .unwrap()
-        .then((res) => {
-          toast.success(res.message || 'Order cancelled successfully');
-        })
-        .catch((err) => {
-          toast.error(err || 'Failed to cancel order');
-        });
-    }
-  };
+
 
   const handleOrderStatusUpdate = useCallback((payload) => {
     dispatch(updateOrderStatusInList({
@@ -317,24 +304,6 @@ const UserDashboard = () => {
                             onClick={() => { setCancelOrderId(ord._id); setCancelReason(''); }}
                             className="p-2.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl transition-all duration-200 border border-red-100 flex items-center gap-1.5 font-sans text-xs font-semibold"
                             title="Cancel Order"
-
-
-                        {ord.status?.toLowerCase() === 'placed' && (
-                          <button
-                            onClick={() => handleCancelOrder(ord._id)}
-                            className="px-3.5 py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-700 hover:text-white rounded-xl transition-all duration-200 border border-rose-100 font-sans font-bold text-xs"
-                            title="Cancel Order"
-                          >
-                            Cancel
-                          </button>
-                        )}
-
-                        {ord.status?.toLowerCase() === 'delivered' && ord.paymentStatus?.toLowerCase() === 'paid' && (
-                          <button 
-                            onClick={() => downloadReceipt(ord)}
-                            className="p-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:text-white rounded-xl transition-all duration-200 border border-emerald-100"
-                            title="Download Receipt"
-
                           >
                             <XCircle className="w-4 h-4" />
                             <span className="hidden md:inline">Cancel</span>

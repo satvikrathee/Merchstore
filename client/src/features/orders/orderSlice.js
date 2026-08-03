@@ -67,13 +67,18 @@ export const cancelOrder = createAsyncThunk(
   async ({ orderId, reason }, { rejectWithValue }) => {
     try {
       const response = await api.put(`/orders/${orderId}/cancel`, { reason });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to cancel order');
+    }
+  }
+);
 
 export const cancelUserOrder = createAsyncThunk(
-  'orders/cancel',
+  'orders/cancelUser',
   async (orderId, { rejectWithValue }) => {
     try {
       const response = await api.put(`/orders/${orderId}/cancel`);
-
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to cancel order');
@@ -180,49 +185,60 @@ const orderSlice = createSlice({
       })
 
 
-      // Cancel Order
+      // Cancel Order (User/Admin via cancelOrder)
+      .addCase(cancelOrder.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(cancelOrder.fulfilled, (state, action) => {
+        state.loading = false;
         const updatedOrder = action.payload?.order || action.payload?.data;
-        if (updatedOrder?._id) {
-          const item = state.list.find((o) => o._id === updatedOrder._id);
-          if (item) item.status = 'cancelled';
-          if (state.currentOrder?._id === updatedOrder._id) {
-            state.currentOrder.status = 'cancelled';
+        if (updatedOrder) {
+          const orderId = updatedOrder._id || updatedOrder.orderId;
+          const status = updatedOrder.status || 'cancelled';
+          const history = updatedOrder.history || updatedOrder.statusHistory;
+          
+          const index = state.list.findIndex((o) => String(o._id) === String(orderId));
+          if (index !== -1) {
+            state.list[index].status = status;
+            if (history) state.list[index].statusHistory = history;
+          }
+          if (state.currentOrder && String(state.currentOrder._id) === String(orderId)) {
+            state.currentOrder.status = status;
+            if (history) state.currentOrder.statusHistory = history;
           }
         }
+      })
+      .addCase(cancelOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
 
-      
-      // Cancel Order
+      // Cancel User Order (via cancelUserOrder)
       .addCase(cancelUserOrder.pending, (state) => {
         state.loading = true;
       })
       .addCase(cancelUserOrder.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedOrder = action.payload?.data;
+        const updatedOrder = action.payload?.order || action.payload?.data;
         if (updatedOrder) {
-          // Update status in list
-          const index = state.list.findIndex(
-            (o) => String(o._id) === String(updatedOrder.orderId)
-          );
+          const orderId = updatedOrder._id || updatedOrder.orderId;
+          const status = updatedOrder.status || 'cancelled';
+          const history = updatedOrder.history || updatedOrder.statusHistory;
+
+          const index = state.list.findIndex((o) => String(o._id) === String(orderId));
           if (index !== -1) {
-            state.list[index].status = updatedOrder.status;
-            if (updatedOrder.history) {
-              state.list[index].statusHistory = updatedOrder.history;
-            }
+            state.list[index].status = status;
+            if (history) state.list[index].statusHistory = history;
           }
-          // Update status in currentOrder
-          if (state.currentOrder && String(state.currentOrder._id) === String(updatedOrder.orderId)) {
-            state.currentOrder.status = updatedOrder.status;
-            if (updatedOrder.history) {
-              state.currentOrder.statusHistory = updatedOrder.history;
-            }
+          if (state.currentOrder && String(state.currentOrder._id) === String(orderId)) {
+            state.currentOrder.status = status;
+            if (history) state.currentOrder.statusHistory = history;
           }
         }
       })
       .addCase(cancelUserOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-
       });
   }
 });
